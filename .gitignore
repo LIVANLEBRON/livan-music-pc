@@ -1,0 +1,26 @@
+# Binarios pesados (se descargan automáticamente al compilar)
+ffmpeg.exe
+yt-dlp.exe
+
+# Carpetas generadas por PyInstaller
+dist/
+build/
+*.spec
+
+# Instalador generado
+installer_output/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Entornos virtuales
+venv/
+.env/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
