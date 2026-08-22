@@ -81,11 +81,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnShuffle = document.getElementById('btn-shuffle');
     const btnRepeat = document.getElementById('btn-repeat');
     const btnFav = document.getElementById('btn-player-fav');
+    const bottomPlayer = document.querySelector('.bottom-player');
+    const nowPlaying = document.querySelector('.now-playing');
+    const btnPlayerExpand = document.getElementById('btn-player-expand');
+    const btnPlayerCollapse = document.getElementById('btn-player-collapse');
     
     const progressBar = document.getElementById('progress-bar');
     const volumeBar = document.getElementById('volume-bar');
     const timeCurrent = document.getElementById('time-current');
     const timeTotal = document.getElementById('time-total');
+
+    function setMobilePlayerExpanded(expanded) {
+        const mobile = window.matchMedia('(max-width: 820px)').matches;
+        const shouldExpand = Boolean(expanded && mobile);
+        bottomPlayer.classList.toggle('mobile-player-expanded', shouldExpand);
+        document.documentElement.classList.toggle('mobile-player-open', shouldExpand);
+        btnPlayerExpand.setAttribute('aria-expanded', String(shouldExpand));
+        if(shouldExpand) btnPlayerCollapse.focus({ preventScroll: true });
+    }
+
+    btnPlayerExpand.addEventListener('click', () => setMobilePlayerExpanded(true));
+    btnPlayerCollapse.addEventListener('click', () => setMobilePlayerExpanded(false));
+    nowPlaying.addEventListener('click', event => {
+        if(window.matchMedia('(max-width: 820px)').matches && !event.target.closest('button')) {
+            setMobilePlayerExpanded(true);
+        }
+    });
+    tabs.forEach(tab => tab.addEventListener('click', () => setMobilePlayerExpanded(false)));
+    window.addEventListener('keydown', event => {
+        if(event.key === 'Escape') setMobilePlayerExpanded(false);
+    });
+    window.matchMedia('(min-width: 821px)').addEventListener('change', event => {
+        if(event.matches) setMobilePlayerExpanded(false);
+    });
     
     function formatTime(seconds) {
         if(isNaN(seconds)) return "0:00";
@@ -303,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!song) return;
 
         const action = event.target.closest('[data-action]')?.dataset.action;
-        if(action === 'play') {
+        if(action === 'play' || !action) {
             window.playFromLibrary(index);
             return;
         }
@@ -401,15 +429,18 @@ document.addEventListener('DOMContentLoaded', () => {
         audio.src = song.stream_url || `/stream?file=${encodeURIComponent(song.filename)}`;
         audio.play().catch(error => console.error('No se pudo iniciar la reproducción:', error));
         btnPlay.innerHTML = '<span class="material-symbols-outlined">pause</span>';
+        btnPlay.setAttribute('aria-label', 'Pausar');
     }
 
     btnPlay.onclick = () => {
         if(audio.paused) {
             audio.play();
             btnPlay.innerHTML = '<span class="material-symbols-outlined">pause</span>';
+            btnPlay.setAttribute('aria-label', 'Pausar');
         } else {
             audio.pause();
             btnPlay.innerHTML = '<span class="material-symbols-outlined">play_arrow</span>';
+            btnPlay.setAttribute('aria-label', 'Reproducir');
         }
     };
 
@@ -432,6 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Stop if no repeat and at end
                 audio.pause();
                 btnPlay.innerHTML = '<span class="material-symbols-outlined">play_arrow</span>';
+                btnPlay.setAttribute('aria-label', 'Reproducir');
             } else {
                 playSong(currentIndex + 1);
             }
@@ -441,19 +473,67 @@ document.addEventListener('DOMContentLoaded', () => {
     btnNext.onclick = playNext;
     btnPrev.onclick = () => playSong(currentIndex - 1);
 
-    audio.addEventListener('timeupdate', () => {
-        progressBar.value = (audio.currentTime / audio.duration) * 100 || 0;
+    let isScrubbingProgress = false;
+
+    function setProgressVisual(value) {
+        const percent = Math.min(100, Math.max(0, Number(value) || 0));
+        progressBar.value = percent;
+        progressBar.style.setProperty('--range-progress', `${percent}%`);
+    }
+
+    function syncProgressFromAudio() {
+        if(isScrubbingProgress) return;
+        const percent = Number.isFinite(audio.duration) && audio.duration > 0
+            ? (audio.currentTime / audio.duration) * 100
+            : 0;
+        setProgressVisual(percent);
         timeCurrent.textContent = formatTime(audio.currentTime);
-    });
+    }
+
+    function previewProgressSeek() {
+        isScrubbingProgress = true;
+        setProgressVisual(progressBar.value);
+        if(Number.isFinite(audio.duration) && audio.duration > 0) {
+            timeCurrent.textContent = formatTime((Number(progressBar.value) / 100) * audio.duration);
+        }
+    }
+
+    function commitProgressSeek() {
+        if(!Number.isFinite(audio.duration) || audio.duration <= 0) {
+            isScrubbingProgress = false;
+            syncProgressFromAudio();
+            return;
+        }
+        const targetTime = (Number(progressBar.value) / 100) * audio.duration;
+        audio.currentTime = targetTime;
+        timeCurrent.textContent = formatTime(targetTime);
+        setProgressVisual(progressBar.value);
+        isScrubbingProgress = false;
+    }
+
+    audio.addEventListener('timeupdate', syncProgressFromAudio);
 
     audio.addEventListener('loadedmetadata', () => {
         timeTotal.textContent = formatTime(audio.duration);
+        syncProgressFromAudio();
     });
+
+    audio.addEventListener('seeked', syncProgressFromAudio);
 
     audio.addEventListener('ended', playNext);
 
-    progressBar.addEventListener('input', () => {
-        audio.currentTime = (progressBar.value / 100) * audio.duration;
+    progressBar.addEventListener('pointerdown', () => { isScrubbingProgress = true; });
+    progressBar.addEventListener('input', previewProgressSeek);
+    progressBar.addEventListener('change', commitProgressSeek);
+    progressBar.addEventListener('pointerup', () => {
+        if(isScrubbingProgress) commitProgressSeek();
+    });
+    progressBar.addEventListener('pointercancel', () => {
+        isScrubbingProgress = false;
+        syncProgressFromAudio();
+    });
+    progressBar.addEventListener('blur', () => {
+        if(isScrubbingProgress) commitProgressSeek();
     });
 
     const btnSpeed = document.getElementById('btn-speed');
@@ -639,12 +719,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.innerHTML = `
                     <div class="song-card-img-container">
                         <img src="${escapeAttribute(item.thumbnail)}" class="song-card-img" alt="">
-                        <button class="song-card-action download-btn" title="Descargar">
-                            <span class="material-symbols-outlined">download</span>
-                        </button>
                     </div>
                     <div class="song-card-title">${escapeHtml(item.title)}</div>
                     <div class="song-card-artist">${escapeHtml(item.artist)}</div>
+                    <button class="song-card-action download-btn" type="button" title="Descargar" aria-label="Descargar ${escapeAttribute(item.title)}">
+                        <span class="material-symbols-outlined">download</span>
+                    </button>
                 `;
                 
                 div.querySelector('.download-btn').onclick = (e) => {
@@ -712,6 +792,44 @@ document.addEventListener('DOMContentLoaded', () => {
         updateHistoryUI();
     };
 
+    async function revealDownloadedSong(filename, title) {
+        const librarySearch = document.getElementById('library-search');
+        librarySearch.value = '';
+        await loadLibrary(true);
+
+        const normalizedTitle = String(title || '').trim().toLowerCase();
+        let songIndex = currentPlaylist.findIndex(song => filename && song.filename === filename);
+        if(songIndex < 0 && normalizedTitle) {
+            songIndex = currentPlaylist.findIndex(song =>
+                String(song.title || '').trim().toLowerCase().includes(normalizedTitle)
+            );
+        }
+
+        const libraryTab = [...tabs].find(tab => tab.dataset.tab === 'library');
+        libraryTab?.click();
+
+        const notice = document.getElementById('library-notice');
+        const noticeText = document.getElementById('library-notice-text');
+        const playDownloaded = document.getElementById('btn-play-downloaded');
+        notice.hidden = false;
+        noticeText.textContent = songIndex >= 0
+            ? 'Ya está guardada. Toca la canción o pulsa Reproducir ahora.'
+            : 'La descarga terminó y la biblioteca ya fue actualizada.';
+        playDownloaded.hidden = songIndex < 0;
+        playDownloaded.onclick = songIndex >= 0 ? () => {
+            window.playFromLibrary(songIndex);
+            notice.hidden = true;
+        } : null;
+
+        requestAnimationFrame(() => {
+            document.querySelectorAll('#library-list .new-download').forEach(card => card.classList.remove('new-download'));
+            if(songIndex < 0) return;
+            const card = document.querySelector(`#library-list .song-card[data-song-index="${songIndex}"]`);
+            card?.classList.add('new-download');
+            card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    }
+
     function downloadSong(id, title, thumbnail, btn) {
         btn.innerHTML = '<span class="material-symbols-outlined" style="animation: spin 2s linear infinite;">sync</span>';
         btn.style.background = 'rgba(59, 130, 246, 0.2)';
@@ -753,8 +871,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.innerHTML = '<span class="material-symbols-outlined">check_circle</span>';
                 btn.style.background = 'rgba(16, 185, 129, 0.2)';
                 btn.style.color = '#10B981';
-                loadLibrary(true);
                 evtSource.close();
+                revealDownloadedSong(data.library_filename, title);
             } else if (data.status === 'error') {
                 historyItem.status = 'error';
                 historyItem.statusText = data.text || 'Error en descarga';

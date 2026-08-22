@@ -280,6 +280,7 @@ class Handler(SimpleHTTPRequestHandler):
                     completed_event = {
                         "status": "done",
                         "text": "Descarga completada",
+                        "library_filename": os.path.basename(final_path) if final_path else "",
                     }
                     if desktop_session:
                         completed_event.update({

@@ -22,6 +22,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from yt_server import DESKTOP_SESSION_TOKEN, run_server, PORT
 from tunnel_manager import start_tunnel, stop_tunnel, tunnel_status
+from sleep_inhibitor import SleepInhibitor
 
 
 class DesktopApi:
@@ -69,23 +70,25 @@ def wait_for_server(port, timeout=15):
     return False  # Timeout
 
 if __name__ == '__main__':
-    # 1. Iniciar el servidor local en un hilo invisible
-    server_thread = threading.Thread(target=start_background_server, daemon=True)
-    server_thread.start()
-
-    # 2. Esperar a que el servidor responda (hasta 15 segundos)
-    print("Esperando al servidor...")
-    ready = wait_for_server(PORT, timeout=15)
-    if not ready:
-        print("ADVERTENCIA: El servidor tardó demasiado. Abriendo de todas formas...")
-
-    # El túnel depende del servidor local y comparte su ciclo de vida.
-    start_tunnel()
-
-    clean_url = f'http://127.0.0.1:{PORT}'
-    desktop_url = f'{clean_url}/?{urlencode({"desktop_token": DESKTOP_SESSION_TOKEN})}'
-
+    sleep_inhibitor = SleepInhibitor()
+    sleep_inhibitor.start()
     try:
+        # 1. Iniciar el servidor local en un hilo invisible
+        server_thread = threading.Thread(target=start_background_server, daemon=True)
+        server_thread.start()
+
+        # 2. Esperar a que el servidor responda (hasta 15 segundos)
+        print("Esperando al servidor...")
+        ready = wait_for_server(PORT, timeout=15)
+        if not ready:
+            print("ADVERTENCIA: El servidor tardó demasiado. Abriendo de todas formas...")
+
+        # El túnel depende del servidor local y comparte su ciclo de vida.
+        start_tunnel()
+
+        clean_url = f'http://127.0.0.1:{PORT}'
+        desktop_url = f'{clean_url}/?{urlencode({"desktop_token": DESKTOP_SESSION_TOKEN})}'
+
         if webview is None:
             # En Linux la interfaz web puede funcionar sin instalar pywebview.
             print(f"Abriendo Livan Music en el navegador: {clean_url}")
@@ -110,3 +113,4 @@ if __name__ == '__main__':
             webview.start(**start_options)
     finally:
         stop_tunnel()
+        sleep_inhibitor.stop()

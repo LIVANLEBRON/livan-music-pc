@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-set -uo pipefail
+set -euo pipefail
 
-PROYECTO="/run/media/livana/Datos/livan-music-pc"
-cd "$PROYECTO" || exit 1
+PROYECTO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROYECTO"
 exec python3 app_pc.py

@@ -13,6 +13,7 @@ from library_config import CONFIG_DIR
 TOKEN_FILE = CONFIG_DIR / "cloudflare-tunnel.token"
 HOSTNAME_FILE = CONFIG_DIR / "cloudflare-hostname.txt"
 LOG_FILE = CONFIG_DIR / "cloudflared.log"
+EMBEDDED_CONFIG_DIR = "private_defaults"
 
 _process = None
 _log_handle = None
@@ -24,6 +25,25 @@ def _application_dirs():
         yield Path(sys.executable).parent
     else:
         yield Path(__file__).resolve().parent
+
+
+def _private_file(filename):
+    """Usa primero la configuración del usuario y luego la incluida en la app."""
+    user_file = CONFIG_DIR / filename
+    try:
+        if user_file.is_file() and user_file.stat().st_size > 0:
+            return user_file
+    except OSError:
+        pass
+
+    for directory in _application_dirs():
+        candidate = directory / EMBEDDED_CONFIG_DIR / filename
+        try:
+            if candidate.is_file() and candidate.stat().st_size > 0:
+                return candidate
+        except OSError:
+            continue
+    return None
 
 
 def find_cloudflared():
@@ -46,8 +66,11 @@ def find_cloudflared():
 
 
 def configured_hostname():
+    hostname_file = _private_file(HOSTNAME_FILE.name)
+    if hostname_file is None:
+        return ""
     try:
-        return HOSTNAME_FILE.read_text(encoding="utf-8").strip()
+        return hostname_file.read_text(encoding="utf-8").strip()
     except OSError:
         return ""
 
@@ -55,7 +78,7 @@ def configured_hostname():
 def tunnel_status():
     running = _process is not None and _process.poll() is None
     return {
-        "configured": TOKEN_FILE.is_file() and TOKEN_FILE.stat().st_size > 0,
+        "configured": _private_file(TOKEN_FILE.name) is not None,
         "running": running,
         "hostname": configured_hostname(),
         "log_file": str(LOG_FILE),
@@ -68,7 +91,8 @@ def start_tunnel():
 
     if _process is not None and _process.poll() is None:
         return tunnel_status()
-    if not TOKEN_FILE.is_file() or TOKEN_FILE.stat().st_size == 0:
+    token_file = _private_file(TOKEN_FILE.name)
+    if token_file is None:
         print(f"Cloudflare Tunnel no configurado: falta {TOKEN_FILE}")
         return tunnel_status()
 
@@ -87,7 +111,7 @@ def start_tunnel():
         "info",
         "run",
         "--token-file",
-        str(TOKEN_FILE),
+        str(token_file),
     ]
     options = {
         "stdin": subprocess.DEVNULL,

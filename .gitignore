@@ -1,4 +1,7 @@
 # Binarios pesados (se descargan automáticamente al compilar)
+*.exe
+*.AppImage
+Livan-Music
 ffmpeg.exe
 yt-dlp.exe
 deno.exe
@@ -22,9 +25,26 @@ __pycache__/
 # Entornos virtuales
 venv/
 .env/
+.venv/
+
+# Configuración y credenciales privadas
+.env
+.env.*
+*.token
+*.pem
+*.key
+private_defaults/
+cloudflare-hostname.txt
+cloudflare-tunnel.token
 
 # VS Code
 .vscode/
 
 # Logs
 *.log
+
+# Archivos del sistema y pruebas locales
+.DS_Store
+Thumbs.db
+coverage/
+.pytest_cache/

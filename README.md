@@ -1,146 +1,190 @@
-# 🎵 Livan Music — Reproductor de Música para PC
+# Livan Music
 
-Reproductor de música de escritorio para Windows y Linux construido con Python y una interfaz web.
-Descarga canciones de YouTube directamente a tu PC y las reproduce sin necesidad de conexión.
+Aplicación personal de escritorio y servidor de música creada por **Livan Andrés**.
+Permite administrar una biblioteca alojada en el propio equipo, reproducirla desde
+la aplicación o desde otros dispositivos y descargar nuevas canciones en una
+carpeta configurable.
 
----
+El desarrollo principal se ejecuta y se prueba actualmente en una **PC con
+Linux (Nobara)**. El proyecto también incluye el proceso de compilación para
+Windows.
 
-## ✨ Características
+> Livan Music está pensado para bibliotecas personales. Cada usuario es
+> responsable de utilizar únicamente contenido que tenga derecho a descargar.
 
-- 🔍 **Búsqueda en YouTube** — Busca y descarga canciones en formato M4A
-- 🎵 **Reproductor local** — Biblioteca con carátulas, control de velocidad, shuffle y repeat
-- 📁 **Varias carpetas** — Añade colecciones existentes sin mover los archivos
-- ⬇️ **Destino configurable** — Elige dónde se guardan las nuevas descargas
-- ❤️ **Favoritos y Playlists** — Organiza tu música como quieras
-- 📜 **Historial de descargas** — Seguimiento en tiempo real del progreso
-- 🖥️ **App nativa de Windows** — Se instala como cualquier programa
-- 🐧 **Compatible con Linux** — Usa el navegador si pywebview no está instalado
-- 🌐 **Acceso remoto opcional** — Inicia y detiene Cloudflare Tunnel junto con la app
-- 🔒 **Modo web protegido** — Las rutas y el borrado de archivos solo existen en la app nativa
+## Qué ofrece
 
----
+- Biblioteca local con carátulas, favoritos y playlists.
+- Reproductor con búsqueda, progreso, salto temporal, volumen, repetición,
+  reproducción aleatoria y velocidad configurable.
+- Interfaz adaptable para escritorio, navegador y teléfono.
+- Búsqueda y descarga con progreso en tiempo real.
+- Cambio automático a **Biblioteca** al terminar una descarga, con acceso a
+  **Reproducir ahora**.
+- Carpeta de descargas configurable y soporte para varias carpetas de música.
+- Acceso desde la red local mediante el puerto `8642`.
+- Acceso remoto opcional mediante Cloudflare Tunnel.
+- Protección de las operaciones sensibles: las rutas del sistema y el borrado
+  de archivos solamente están disponibles en la ventana de escritorio.
+- Bloqueo reversible de la suspensión automática mientras el servidor está
+  activo.
 
-## 📦 Estructura del Proyecto
+## Tecnologías
 
-```
-Livan_Music_PC/
-├── app_pc.py          # Punto de entrada de la app (pywebview)
-├── yt_server.py       # Servidor HTTP interno (API + archivos estáticos)
-├── library_config.py  # Configuración persistente de carpetas
-├── compilar.bat       # Script de compilación (PyInstaller)
-├── installer.iss      # Script del instalador (Inno Setup)
-├── icon.ico           # Ícono de la aplicación
-└── public/
-    ├── index.html     # Interfaz de usuario
-    ├── style.css      # Estilos
-    └── script.js      # Lógica del frontend
-```
+| Capa | Tecnología | Responsabilidad |
+| --- | --- | --- |
+| Interfaz | HTML, CSS y JavaScript puro | Navegación, biblioteca y reproductor adaptable |
+| Servidor | Python y `ThreadingHTTPServer` | API local, archivos estáticos y streaming |
+| Escritorio | pywebview | Ventana nativa alrededor de la interfaz web |
+| Descargas | yt-dlp | Búsqueda y obtención del audio |
+| Audio | FFmpeg | Extracción y normalización a M4A |
+| Compatibilidad con YouTube | Node.js o Deno | Motor JavaScript auxiliar para yt-dlp |
+| Acceso remoto | cloudflared | Túnel opcional hacia el servidor local |
+| Distribución | PyInstaller | Ejecutables independientes para Linux y Windows |
 
----
+No se utiliza React, Electron, Flask ni una base de datos externa. La música y
+la configuración permanecen en el equipo que ejecuta Livan Music.
 
-## 🛠️ Requisitos para Desarrollar
+## Cómo funciona
 
-- Python 3.10+
-- Node.js 22+ o Deno 2.3+ (necesario para resolver los desafíos actuales de YouTube)
-- Instalar dependencias:
-```bash
-pip install pywebview
-```
-
----
-
-## 🚀 Ejecutar en modo desarrollo
-
-```bash
-python app_pc.py
-```
-
-### Linux
-
-El sistema usa automáticamente `yt-dlp` y `ffmpeg` instalados. En este equipo,
-el proyecto está en la unidad Datos:
+Al abrir la aplicación, `app_pc.py` inicia el servidor Python en segundo plano,
+espera a que responda y abre la interfaz en una ventana pywebview. Si el túnel
+está configurado, también inicia `cloudflared`. Al cerrar la ventana se detienen
+el túnel y el bloqueo de suspensión.
 
 ```text
-/run/media/livana/Datos/livan-music-pc
+Livan Music
+├── ventana de escritorio (pywebview)
+├── interfaz HTML/CSS/JavaScript
+├── servidor Python en el puerto 8642
+│   ├── catálogo de carpetas locales
+│   ├── streaming con soporte HTTP Range
+│   ├── búsqueda y descarga mediante yt-dlp
+│   └── progreso de descarga mediante Server-Sent Events
+├── FFmpeg + motor JavaScript de YouTube
+└── Cloudflare Tunnel opcional
 ```
 
-Para abrirla:
+La explicación detallada de componentes, rutas y flujos está en
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Estructura del repositorio
+
+```text
+livan-music-pc/
+├── app_pc.py                    # Entrada de la aplicación de escritorio
+├── yt_server.py                 # Servidor HTTP, API, descargas y streaming
+├── library_config.py            # Carpetas y configuración persistente
+├── tunnel_manager.py            # Ciclo de vida de Cloudflare Tunnel
+├── sleep_inhibitor.py           # Bloqueo de suspensión por plataforma
+├── public/
+│   ├── index.html               # Estructura de la interfaz
+│   ├── style.css                # Diseño responsivo
+│   ├── script.js                # Reproductor y comunicación con la API
+│   └── fonts/                   # Tipografías servidas localmente
+├── iniciar-linux.sh             # Ejecución en desarrollo sobre Linux
+├── compilar-linux.sh            # Ejecutable Linux con PyInstaller
+├── preparar-windows.ps1         # Descarga dependencias de Windows
+├── compilar.bat                 # Ejecutable Windows con PyInstaller
+├── installer.iss                # Instalador de Windows con Inno Setup
+├── requirements.txt             # Dependencias Python de desarrollo
+└── docs/
+    ├── ARCHITECTURE.md           # Diseño técnico completo
+    └── SECURITY.md               # Modelo de acceso y gestión de secretos
+```
+
+## Desarrollo en Linux
+
+### Requisitos
+
+- Python 3.10 o superior.
+- Dependencias Python de `requirements.txt`.
+- yt-dlp y FFmpeg disponibles en el sistema.
+- Node.js 22+ o Deno 2.3+.
+- WebKitGTK/GTK para mostrar la ventana de pywebview.
+- cloudflared solamente si se utilizará el túnel remoto.
+
+Los nombres de los paquetes de GTK y WebKitGTK cambian según la distribución.
+
+### Preparación y ejecución
 
 ```bash
+python3 -m pip install -r requirements.txt
+chmod +x iniciar-linux.sh compilar-linux.sh
 ./iniciar-linux.sh
 ```
 
-Para generar un ejecutable Linux con ventana nativa:
+La interfaz local queda disponible en `http://127.0.0.1:8642`. Otros equipos
+de la misma red pueden utilizar la dirección IP local del servidor y ese mismo
+puerto.
+
+### Crear el ejecutable Linux
 
 ```bash
 ./compilar-linux.sh
 ```
 
-El archivo final se copia automáticamente a la carpeta Descargas del usuario
-con el nombre `Livan-Music`.
+El resultado se copia como `Livan-Music` en la carpeta de descargas del usuario.
 
-## 🌐 Acceso remoto con Cloudflare Tunnel
+## Desarrollo y compilación en Windows
 
-Livan Music puede iniciar automáticamente un túnel administrado remotamente.
-El servidor y el túnel se abren al ejecutar la aplicación y el conector se
-cierra al cerrar la ventana. El token nunca se guarda en Git ni dentro del EXE.
+Desde PowerShell o Símbolo del sistema:
 
-La primera vez, crea en Cloudflare una ruta publicada cuyo servicio sea
-`http://localhost:8642`. Después guarda el token privado una sola vez:
-
-```bash
-./configurar-tunel-linux.sh
-```
-
-En Windows, ejecuta `configurar-tunel-windows.ps1` con PowerShell. A partir de
-ese momento basta con abrir `Livan Music.exe` con doble clic. La compilación de
-Windows incluye `cloudflared.exe` automáticamente.
-
----
-
-## 📦 Compilar el instalador
-
-### Paso 1 — Instalar Inno Setup
-```
-winget install JRSoftware.InnoSetup
-```
-
-### Paso 2 — Compilar
-```bash
+```bat
+preparar-windows.ps1
 compilar.bat
 ```
 
-El script prepara automáticamente `yt-dlp.exe`, `ffmpeg.exe` y `deno.exe`, y
-los incluye dentro de la aplicación para que las descargas no dependan de una
-instalación externa.
+`preparar-windows.ps1` obtiene yt-dlp, FFmpeg, Deno y cloudflared. PyInstaller
+genera `dist\Livan Music.exe`. Para crear el instalador se puede compilar
+`installer.iss` con Inno Setup.
 
-### Paso 3 — Generar instalador
+## Carpetas y datos
+
+Por defecto, las descargas se guardan en una subcarpeta `LivanMusic` dentro de
+la carpeta Música del usuario. Desde **Ubicaciones** se puede cambiar ese destino
+y registrar carpetas adicionales sin copiar ni mover sus canciones.
+
+La configuración se almacena fuera del repositorio:
+
+| Sistema | Directorio |
+| --- | --- |
+| Linux | `$XDG_CONFIG_HOME/livan-music` o `~/.config/livan-music` |
+| Windows | `%APPDATA%\LivanMusic` |
+
+## Cloudflare Tunnel y credenciales
+
+La configuración normal nunca guarda el token en el repositorio ni lo añade a
+una compilación pública. Para guardar la credencial de forma local:
+
+```bash
+# Linux
+./configurar-tunel-linux.sh
 ```
-"C:\Users\...\Inno Setup 6\ISCC.exe" installer.iss
+
+```powershell
+# Windows
+.\configurar-tunel-windows.ps1
 ```
 
-El instalador final estará en `installer_output\LivanMusicSetup.exe`
+Existe una compilación portátil privada para mover el servidor entre equipos
+propios:
 
----
-
-## 📁 ¿Dónde se guarda la música?
-
-De forma predeterminada, la música descargada se guarda en:
-```
-C:\Users\{TuUsuario}\Music\LivanMusic\
+```bash
+./compilar-linux.sh --portable-tunnel
 ```
 
-En Linux se usa la carpeta Música configurada por el sistema, por ejemplo
-`~/Música/LivanMusic`. Desde **Ubicaciones** puedes cambiar el destino y añadir
-otras carpetas a la biblioteca sin copiar ni mover su contenido. La selección
-queda guardada en la configuración del usuario.
+```bat
+compilar.bat --portable-tunnel
+```
 
-Al terminar una descarga, el historial de la aplicación muestra la ruta
-completa del archivo guardado.
+Esa variante **sí contiene la credencial dentro del ejecutable**. No debe
+subirse a GitHub, adjuntarse a una versión pública ni enviarse a terceros. El
+modelo de seguridad completo está explicado en
+[`docs/SECURITY.md`](docs/SECURITY.md).
 
+## Autor
 
----
+**Livan Andrés**
 
-## 👨‍💻 Autor
-
-**Livan Andres** — Proyecto personal de reproductor de música.
+Diseño, desarrollo y mantenimiento de Livan Music.

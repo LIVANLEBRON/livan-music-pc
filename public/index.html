@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#08090c">
     <title>Livan Music</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=20260822-library-handoff">
 </head>
 <body>
     <div class="ambient ambient-one"></div>
@@ -20,12 +20,12 @@
             </div>
             <div class="nav-kicker">Tu espacio</div>
             <ul class="nav-links">
-                <li class="active" data-tab="home" tabindex="0" aria-label="Inicio" title="Inicio"><span class="nav-icon material-symbols-outlined">home</span><span class="nav-label">Inicio</span></li>
-                <li data-tab="library" tabindex="0" aria-label="Canciones locales" title="Canciones locales"><span class="nav-icon material-symbols-outlined">library_music</span><span class="nav-label">Canciones locales</span></li>
-                <li data-tab="search" tabindex="0" aria-label="Buscar y descargar" title="Buscar y descargar"><span class="nav-icon material-symbols-outlined">travel_explore</span><span class="nav-label">Buscar y descargar</span></li>
-                <li data-tab="playlists" tabindex="0" aria-label="Mis playlists" title="Mis playlists"><span class="nav-icon material-symbols-outlined">queue_music</span><span class="nav-label">Mis playlists</span></li>
-                <li data-tab="settings" data-desktop-only tabindex="0" aria-label="Ubicaciones" title="Ubicaciones"><span class="nav-icon material-symbols-outlined">folder_managed</span><span class="nav-label">Ubicaciones</span></li>
-                <li data-tab="history" tabindex="0" aria-label="Historial" title="Historial"><span class="nav-icon material-symbols-outlined">history</span><span class="nav-label">Historial</span></li>
+                <li class="active" data-tab="home" data-mobile-label="Inicio" tabindex="0" aria-label="Inicio" title="Inicio"><span class="nav-icon material-symbols-outlined">home</span><span class="nav-label">Inicio</span></li>
+                <li data-tab="library" data-mobile-label="Biblioteca" tabindex="0" aria-label="Canciones locales" title="Canciones locales"><span class="nav-icon material-symbols-outlined">library_music</span><span class="nav-label">Canciones locales</span></li>
+                <li data-tab="search" data-mobile-label="Buscar" tabindex="0" aria-label="Buscar y descargar" title="Buscar y descargar"><span class="nav-icon material-symbols-outlined">travel_explore</span><span class="nav-label">Buscar y descargar</span></li>
+                <li data-tab="playlists" data-mobile-label="Playlists" tabindex="0" aria-label="Mis playlists" title="Mis playlists"><span class="nav-icon material-symbols-outlined">queue_music</span><span class="nav-label">Mis playlists</span></li>
+                <li data-tab="settings" data-mobile-label="Carpetas" data-desktop-only tabindex="0" aria-label="Ubicaciones" title="Ubicaciones"><span class="nav-icon material-symbols-outlined">folder_managed</span><span class="nav-label">Ubicaciones</span></li>
+                <li data-tab="history" data-mobile-label="Historial" tabindex="0" aria-label="Historial" title="Historial"><span class="nav-icon material-symbols-outlined">history</span><span class="nav-label">Historial</span></li>
             </ul>
             <div class="sidebar-status">
                 <span class="status-dot"></span>
@@ -84,6 +84,11 @@
                         <button id="btn-refresh" class="icon-button btn-refresh" title="Actualizar biblioteca" aria-label="Actualizar biblioteca"><span class="material-symbols-outlined refresh-icon">refresh</span></button>
                     </div>
                 </div>
+                <div id="library-notice" class="library-notice" role="status" aria-live="polite" hidden>
+                    <span class="material-symbols-outlined">download_done</span>
+                    <div><strong>Descarga lista</strong><p id="library-notice-text">La canción ya está en tu biblioteca.</p></div>
+                    <button id="btn-play-downloaded" class="btn-primary" type="button"><span class="material-symbols-outlined">play_arrow</span>Reproducir ahora</button>
+                </div>
                 <div class="song-grid" id="library-list"><p class="loading-text">Cargando biblioteca...</p></div>
             </section>
 
@@ -95,6 +100,7 @@
                         <button id="btn-search" class="btn-primary"><span>Buscar</span><i class="material-symbols-outlined">arrow_forward</i></button>
                     </div>
                     <div class="search-hint"><span class="material-symbols-outlined">lightbulb</span> También puedes pegar directamente la URL de un video.</div>
+                    <div class="search-library-note"><span class="material-symbols-outlined">library_music</span><div><strong>Aquí descargas; en Biblioteca escuchas.</strong><small>Cuando termine, te llevaremos directamente a la canción.</small></div></div>
                 </div>
                 <div id="search-status" class="status-msg"></div><div class="song-grid" id="search-results"></div>
             </section>
@@ -161,6 +167,11 @@
     </div>
 
     <div class="bottom-player">
+        <div class="mobile-player-header">
+            <button id="btn-player-collapse" class="control-btn mobile-player-collapse" type="button" aria-label="Cerrar reproductor ampliado"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+            <strong>Reproduciendo ahora</strong>
+            <span class="mobile-player-brand">Livan Music</span>
+        </div>
         <div class="now-playing">
             <div class="album-art" id="player-art">
                 <img id="player-img" class="player-cover" src="" alt="Portada de la canción"><img id="player-art-icon" class="player-default-logo" src="/logo.png" alt="Logo de Livan Music">
@@ -183,8 +194,9 @@
             <button id="btn-speed" class="control-btn speed-control" title="Velocidad de reproducción">1x</button>
             <div class="volume-slider"><span class="material-symbols-outlined">volume_up</span><input type="range" id="volume-bar" value="100" min="0" max="100" aria-label="Volumen"></div>
         </div>
+        <button id="btn-player-expand" class="control-btn mobile-player-expand" type="button" aria-label="Abrir reproductor completo" aria-expanded="false"><span class="material-symbols-outlined">open_in_full</span></button>
         <audio id="audio-player"></audio>
     </div>
-    <script src="script.js"></script>
+    <script src="script.js?v=20260822-library-handoff"></script>
 </body>
 </html>
