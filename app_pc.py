@@ -5,6 +5,12 @@ import time
 import urllib.request
 import webbrowser
 
+# WebKitGTK puede abrir una ventana vacía en algunos equipos Linux con
+# Wayland/X11 cuando el renderizador DMABUF no es compatible con el driver.
+# Debe definirse antes de importar pywebview/WebKit.
+if sys.platform.startswith('linux'):
+    os.environ.setdefault('WEBKIT_DISABLE_DMABUF_RENDERER', '1')
+
 try:
     import webview
 except ImportError:
@@ -83,4 +89,6 @@ if __name__ == '__main__':
             js_api=DesktopApi()
         )
         start_options = {"icon": icon_path} if os.path.isfile(icon_path) else {}
+        if sys.platform.startswith('linux'):
+            start_options["gui"] = "gtk"
         webview.start(**start_options)
