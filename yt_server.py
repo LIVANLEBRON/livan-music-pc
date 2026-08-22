@@ -270,38 +270,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not filepath:
                 self._json(404, {"error": "Archivo no encontrado"})
                 return
-            
-            try:
-                filesize = os.path.getsize(filepath)
-                self.send_response(200)
-                # Configurar headers para permitir streaming o imagenes
-                if filename.lower().endswith(".jpg") or filename.lower().endswith(".jpeg"):
-                    content_type = "image/jpeg"
-                elif filename.lower().endswith(".webp"):
-                    content_type = "image/webp"
-                elif filename.lower().endswith(".png"):
-                    content_type = "image/png"
-                elif filename.lower().endswith((".m4a", ".mp4")):
-                    content_type = "audio/mp4"
-                elif filename.lower().endswith(".wav"):
-                    content_type = "audio/wav"
-                elif filename.lower().endswith(".flac"):
-                    content_type = "audio/flac"
-                elif filename.lower().endswith(".ogg"):
-                    content_type = "audio/ogg"
-                else:
-                    content_type = "audio/mpeg"
-                    
-                self.send_header("Content-Type", content_type)
-                self.send_header("Content-Length", str(filesize))
-                self.send_header("Accept-Ranges", "bytes")
-                self.end_headers()
-                
-                with open(filepath, "rb") as f:
-                    while chunk := f.read(8192 * 4):
-                        self.wfile.write(chunk)
-            except Exception as e:
-                print(f"Error streaming {filename}: {e}")
+            self._stream_file(filepath, filename)
 
         # API: Obtener Playlists
         elif parsed.path == "/api/playlists":
@@ -314,8 +283,11 @@ class Handler(SimpleHTTPRequestHandler):
 
         # Favicon (icon.ico en la raíz del proyecto)
         elif parsed.path == "/favicon.ico":
-            icon_file = os.path.join(exe_dir, "icon.ico")
-            if os.path.exists(icon_file):
+            icon_file = next((candidate for candidate in (
+                os.path.join(exe_dir, "icon.ico"),
+                os.path.join(application_path, "icon.ico"),
+            ) if os.path.isfile(candidate)), None)
+            if icon_file:
                 with open(icon_file, "rb") as f:
                     data = f.read()
                 self.send_response(200)
@@ -330,6 +302,19 @@ class Handler(SimpleHTTPRequestHandler):
         else:
             if self.path == "/": self.path = "/index.html"
             super().do_GET()
+
+    def do_HEAD(self):
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/stream"):
+            filename = parse_qs(parsed.query).get("file", [""])[0]
+            source = parse_qs(parsed.query).get("source", [""])[0]
+            filepath = resolve_library_file(source, filename)
+            if not filepath:
+                self.send_error(404, "Archivo no encontrado")
+                return
+            self._stream_file(filepath, filename, send_body=False)
+            return
+        super().do_HEAD()
 
     def do_POST(self):
         parsed = urlparse(self.path)
@@ -446,6 +431,84 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(data).encode())
         except (BrokenPipeError, ConnectionResetError):
             pass
+
+    def _stream_file(self, filepath, filename, send_body=True):
+        """Entrega audio e imágenes con soporte real para HTTP Range."""
+        try:
+            filesize = os.path.getsize(filepath)
+            start = 0
+            end = filesize - 1
+            status = 200
+            range_header = self.headers.get("Range", "").strip()
+
+            if range_header:
+                try:
+                    unit, range_value = range_header.split("=", 1)
+                    if unit.lower() != "bytes" or "," in range_value:
+                        raise ValueError
+                    start_text, end_text = range_value.split("-", 1)
+                    if start_text:
+                        start = int(start_text)
+                        end = int(end_text) if end_text else end
+                    else:
+                        suffix_length = int(end_text)
+                        if suffix_length <= 0:
+                            raise ValueError
+                        start = max(filesize - suffix_length, 0)
+                    end = min(end, filesize - 1)
+                    if start < 0 or start >= filesize or end < start:
+                        raise ValueError
+                    status = 206
+                except (TypeError, ValueError):
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{filesize}")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+
+            lower_name = filename.lower()
+            if lower_name.endswith((".jpg", ".jpeg")):
+                content_type = "image/jpeg"
+            elif lower_name.endswith(".webp"):
+                content_type = "image/webp"
+            elif lower_name.endswith(".png"):
+                content_type = "image/png"
+            elif lower_name.endswith((".m4a", ".mp4")):
+                content_type = "audio/mp4"
+            elif lower_name.endswith(".wav"):
+                content_type = "audio/wav"
+            elif lower_name.endswith(".flac"):
+                content_type = "audio/flac"
+            elif lower_name.endswith(".ogg"):
+                content_type = "audio/ogg"
+            else:
+                content_type = "audio/mpeg"
+
+            content_length = end - start + 1
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(content_length))
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "private, max-age=3600")
+            if status == 206:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{filesize}")
+            self.end_headers()
+
+            if not send_body:
+                return
+            with open(filepath, "rb") as file_handle:
+                file_handle.seek(start)
+                remaining = content_length
+                while remaining > 0:
+                    chunk = file_handle.read(min(64 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except OSError as error:
+            print(f"Error streaming {filename}: {error}")
 
     def _send_event(self, data):
         try:

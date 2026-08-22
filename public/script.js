@@ -1,4 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const markNativeShell = () => document.documentElement.classList.add('native-shell');
+    if(window.pywebview) markNativeShell();
+    window.addEventListener('pywebviewready', markNativeShell, { once: true });
+
     // --- State ---
     let currentPlaylist = [];
     let activePlaylistView = []; // La lista que se está reproduciendo actualmente
@@ -8,6 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let playlistsData = { "Favoritos": [], "Mis Playlists": {} };
     let shuffleHistory = [];
     let locationSettings = null;
+    let libraryLoaded = false;
+    let libraryRendered = false;
+    let favoriteSongKeys = new Set();
 
     const songKey = song => `${song.source_id || ''}::${song.filename || ''}`;
 
@@ -24,7 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const target = tab.getAttribute('data-tab');
             document.getElementById(`tab-${target}`).classList.add('active');
             
-            if(target === 'library') loadLibrary();
+            if(target === 'library') {
+                if(libraryLoaded) {
+                    if(!libraryRendered) renderLibrary(document.getElementById('library-search').value);
+                } else {
+                    loadLibrary();
+                }
+            }
             if(target === 'playlists') renderPlaylistsTab();
             if(target === 'settings') loadSettings();
         });
@@ -62,6 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/playlists');
             playlistsData = await res.json();
+            favoriteSongKeys = new Set(playlistsData["Favoritos"].map(songKey));
         } catch (e) {
             console.error('Error loading playlists:', e);
         }
@@ -79,16 +93,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function loadLibrary() {
+    async function loadLibrary(force = false) {
+        if(libraryLoaded && !force) return;
         try {
             const res = await fetch('/library');
             const data = await res.json();
             currentPlaylist = data.songs;
+            libraryLoaded = true;
+            libraryRendered = false;
             
             document.getElementById('library-count').textContent = currentPlaylist.length;
             document.getElementById('card-songs').querySelector('h3').textContent = currentPlaylist.length;
-            
-            renderLibrary(document.getElementById('library-search').value);
+
+            if(document.getElementById('tab-library').classList.contains('active')) {
+                renderLibrary(document.getElementById('library-search').value);
+            }
         } catch (e) {
             console.error('Error loading library:', e);
         }
@@ -162,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('library-path').value = '';
             status.textContent = successMessage;
             status.className = 'settings-status success';
-            await loadLibrary();
+            await loadLibrary(true);
         } catch (error) {
             status.textContent = error.message;
             status.className = 'settings-status error';
@@ -183,94 +202,120 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Renderizado de Biblioteca ---
     function renderLibrary(filterText = '') {
         const list = document.getElementById('library-list');
-        list.innerHTML = '';
-        
+        const normalizedFilter = filterText.trim().toLowerCase();
+
         if(currentPlaylist.length === 0) {
             list.innerHTML = '<p class="loading-text">No tienes canciones en tu PC todavía. ¡Ve a la pestaña Buscar!</p>';
+            libraryRendered = true;
             return;
         }
 
+        const fragment = document.createDocumentFragment();
         currentPlaylist.forEach((song, index) => {
             const searchText = `${song.title} ${song.artist}`.toLowerCase();
-            if(filterText && !searchText.includes(filterText.toLowerCase())) return;
-            const isFav = playlistsData["Favoritos"].some(s => songKey(s) === songKey(song));
+            if(normalizedFilter && !searchText.includes(normalizedFilter)) return;
+            const isFav = favoriteSongKeys.has(songKey(song));
 
             const div = document.createElement('div');
             div.className = 'song-card';
-            
-            // Si hay portada
-            let imgHtml = song.thumbnail_url 
-                ? `<img src="${song.thumbnail_url}" class="song-card-img">`
+            div.dataset.songIndex = index;
+
+            const imgHtml = song.thumbnail_url
+                ? `<img src="${escapeHtml(song.thumbnail_url)}" class="song-card-img" loading="lazy" decoding="async" alt="">`
                 : `<span class="material-symbols-outlined" style="font-size: 40px; color: #475569;">music_note</span>`;
-                
+
             div.innerHTML = `
-                <div class="song-card-img-container" onclick="playFromLibrary(${index})">
+                <div class="song-card-img-container" data-action="play" role="button" tabindex="0" aria-label="Reproducir ${escapeHtml(song.title)}">
                     ${imgHtml}
-                    <button class="song-card-action">
+                    <button class="song-card-action" type="button" tabindex="-1" aria-hidden="true">
                         <span class="material-symbols-outlined">play_arrow</span>
                     </button>
                 </div>
-                <div class="song-card-title">${song.title}</div>
-                <div class="song-card-artist">${song.artist}</div>
-                <button class="fav-btn control-btn" style="position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.5); border-radius: 50%; padding: 5px; color: ${isFav ? '#EF4444' : '#fff'};" title="Favoritos">
+                <div class="song-card-title">${escapeHtml(song.title)}</div>
+                <div class="song-card-artist">${escapeHtml(song.artist)}</div>
+                <button class="fav-btn control-btn" data-action="favorite" type="button" style="position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.5); border-radius: 50%; padding: 5px; color: ${isFav ? '#EF4444' : '#fff'};" title="Favoritos" aria-label="Cambiar favorito">
                     <span class="material-symbols-outlined" style="font-size: 20px;">${isFav ? 'favorite' : 'favorite_border'}</span>
                 </button>
-                <button class="delete-btn control-btn" style="position: absolute; top: 15px; left: 15px; background: rgba(239,68,68,0.7); border-radius: 50%; padding: 5px; color: #fff; opacity: 0; transition: opacity 0.3s;" title="Eliminar Canción">
+                <button class="delete-btn control-btn" data-action="delete" type="button" style="position: absolute; top: 15px; left: 15px; background: rgba(239,68,68,0.7); border-radius: 50%; padding: 5px; color: #fff; opacity: 0; transition: opacity 0.3s;" title="Eliminar Canción" aria-label="Eliminar canción">
                     <span class="material-symbols-outlined" style="font-size: 20px;">delete</span>
                 </button>
             `;
             if(activePlaylistView === currentPlaylist && index === currentIndex) div.classList.add('playing');
-            
-            // Mostrar botón de borrar solo al hacer hover
-            div.onmouseenter = () => div.querySelector('.delete-btn').style.opacity = '1';
-            div.onmouseleave = () => div.querySelector('.delete-btn').style.opacity = '0';
-            
-            // Lógica de botón Favorito
-            div.querySelector('.fav-btn').onclick = async (e) => {
-                e.stopPropagation();
-                toggleFavorite(song);
-                renderLibrary(document.getElementById('library-search').value);
-            };
-            
-            // Lógica de botón Eliminar
-            div.querySelector('.delete-btn').onclick = async (e) => {
-                e.stopPropagation();
-                if (confirm(`¿Estás seguro de que quieres borrar "${song.title}" de tu PC? Esta acción no se puede deshacer.`)) {
-                    try {
-                        const res = await fetch('/api/delete_song', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ filename: song.filename, source_id: song.source_id })
-                        });
-                        const data = await res.json();
-                        if (data.status === 'ok') {
-                            loadLibrary(); // recargar
-                        } else {
-                            alert("Error al borrar el archivo: " + data.error);
-                        }
-                    } catch (err) {
-                        alert("Error de conexión al intentar borrar.");
-                    }
-                }
-            };
-            
-            list.appendChild(div);
+
+            fragment.appendChild(div);
         });
+        list.replaceChildren(fragment);
+        libraryRendered = true;
+    }
+
+    function updateLibraryPlayingState() {
+        document.querySelector('#library-list .song-card.playing')?.classList.remove('playing');
+        if(activePlaylistView !== currentPlaylist || currentIndex < 0) return;
+        document.querySelector(`#library-list .song-card[data-song-index="${currentIndex}"]`)?.classList.add('playing');
     }
 
     window.playFromLibrary = function(index) {
         activePlaylistView = currentPlaylist;
         playSong(index);
-        renderLibrary(document.getElementById('library-search').value);
     };
+
+    const libraryList = document.getElementById('library-list');
+    libraryList.addEventListener('keydown', event => {
+        if((event.key === 'Enter' || event.key === ' ') && event.target.matches('[data-action="play"]')) {
+            event.preventDefault();
+            const card = event.target.closest('.song-card');
+            if(card) window.playFromLibrary(Number(card.dataset.songIndex));
+        }
+    });
+    libraryList.addEventListener('click', async event => {
+        const card = event.target.closest('.song-card');
+        if(!card) return;
+        const index = Number(card.dataset.songIndex);
+        const song = currentPlaylist[index];
+        if(!song) return;
+
+        const action = event.target.closest('[data-action]')?.dataset.action;
+        if(action === 'play') {
+            window.playFromLibrary(index);
+            return;
+        }
+        if(action === 'favorite') {
+            await toggleFavorite(song);
+            const isFav = favoriteSongKeys.has(songKey(song));
+            const button = card.querySelector('.fav-btn');
+            button.style.color = isFav ? '#EF4444' : '#fff';
+            button.querySelector('.material-symbols-outlined').textContent = isFav ? 'favorite' : 'favorite_border';
+            return;
+        }
+        if(action === 'delete' && confirm(`¿Estás seguro de que quieres borrar "${song.title}" de tu PC? Esta acción no se puede deshacer.`)) {
+            try {
+                const res = await fetch('/api/delete_song', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: song.filename, source_id: song.source_id })
+                });
+                const data = await res.json();
+                if(data.status === 'ok') {
+                    await loadLibrary(true);
+                } else {
+                    alert("Error al borrar el archivo: " + data.error);
+                }
+            } catch (error) {
+                alert("Error de conexión al intentar borrar.");
+            }
+        }
+    });
 
     // --- Favoritos Logic ---
     async function toggleFavorite(song) {
-        const index = playlistsData["Favoritos"].findIndex(s => songKey(s) === songKey(song));
+        const key = songKey(song);
+        const index = playlistsData["Favoritos"].findIndex(s => songKey(s) === key);
         if (index > -1) {
             playlistsData["Favoritos"].splice(index, 1);
+            favoriteSongKeys.delete(key);
         } else {
             playlistsData["Favoritos"].push(song);
+            favoriteSongKeys.add(key);
         }
         await savePlaylists();
         updatePlayerFavIcon();
@@ -279,17 +324,24 @@ document.addEventListener('DOMContentLoaded', () => {
     function updatePlayerFavIcon() {
         if(currentIndex === -1 || !activePlaylistView[currentIndex]) return;
         const currentSong = activePlaylistView[currentIndex];
-        const isFav = playlistsData["Favoritos"].some(s => songKey(s) === songKey(currentSong));
+        const isFav = favoriteSongKeys.has(songKey(currentSong));
         btnFav.style.color = isFav ? '#EF4444' : '#475569';
         btnFav.innerHTML = `<span class="material-symbols-outlined">${isFav ? 'favorite' : 'favorite_border'}</span>`;
     }
 
     btnFav.onclick = () => {
         if(currentIndex > -1 && activePlaylistView[currentIndex]) {
-            toggleFavorite(activePlaylistView[currentIndex]);
-            if(document.getElementById('tab-library').classList.contains('active')) {
-                renderLibrary(document.getElementById('library-search').value);
-            }
+            toggleFavorite(activePlaylistView[currentIndex]).then(() => {
+                if(activePlaylistView === currentPlaylist) {
+                    const card = document.querySelector(`#library-list .song-card[data-song-index="${currentIndex}"]`);
+                    const button = card?.querySelector('.fav-btn');
+                    if(button) {
+                        const isFav = favoriteSongKeys.has(songKey(activePlaylistView[currentIndex]));
+                        button.style.color = isFav ? '#EF4444' : '#fff';
+                        button.querySelector('.material-symbols-outlined').textContent = isFav ? 'favorite' : 'favorite_border';
+                    }
+                }
+            });
         }
     };
 
@@ -301,6 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         currentIndex = index;
         const song = activePlaylistView[currentIndex];
+        updateLibraryPlayingState();
         
         document.getElementById('player-title').textContent = song.title;
         document.getElementById('player-artist').textContent = song.artist;
@@ -510,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.querySelector('.refresh-icon').addEventListener('animationend', () => {
             btn.classList.remove('spinning');
         }, { once: true });
-        loadLibrary();
+        loadLibrary(true);
     };
 
     document.getElementById('btn-browse-download').onclick = () => chooseFolder('download-path');
@@ -666,7 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.innerHTML = '<span class="material-symbols-outlined">check_circle</span>';
                 btn.style.background = 'rgba(16, 185, 129, 0.2)';
                 btn.style.color = '#10B981';
-                loadLibrary();
+                loadLibrary(true);
                 evtSource.close();
             } else if (data.status === 'error') {
                 historyItem.status = 'error';
