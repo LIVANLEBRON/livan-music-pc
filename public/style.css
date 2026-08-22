@@ -1,3 +1,18 @@
+@font-face {
+    font-family: "Manrope";
+    src: url("/fonts/manrope-latin.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 400 800;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Material Symbols Rounded";
+    src: url("/fonts/material-symbols-rounded.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+}
+
 :root {
     --bg: #07080b;
     --panel: #0d0f14;
@@ -260,6 +275,22 @@ input[type="range"]::-moz-range-track { height: 3px; border-radius: 5px; backgro
 .native-shell .sidebar { background: rgba(7,8,11,.97); }
 .native-shell .bottom-player { background: rgba(8,9,12,.98); }
 .native-shell .ambient { filter: blur(70px); opacity: .14; }
+
+/* WebKitGTK necesita una ruta de composición compatible en Linux. Este perfil
+   conserva la estructura y los colores, pero elimina repintados que reducían
+   el desplazamiento a unos 20 FPS. El navegador y Windows mantienen los efectos. */
+.native-linux *,.native-linux *::before,.native-linux *::after {
+    animation: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+.native-linux .ambient,.native-linux .hero-album-glow,.native-linux .collection-card::after { display: none !important; }
+.native-linux .song-card { content-visibility: visible; contain: none; }
+.native-linux .song-card:hover { transform: none; }
+.native-linux :focus-visible { outline: 2px solid var(--primary-bright); outline-offset: 2px; }
 
 @media (max-width: 1050px) {
     :root { --sidebar-width: 86px; }

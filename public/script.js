@@ -1,5 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const markNativeShell = () => document.documentElement.classList.add('native-shell');
+    const markNativeShell = async () => {
+        document.documentElement.classList.add('native-shell');
+        try {
+            const platform = await window.pywebview?.api?.get_platform?.();
+            if(platform && /^[a-z]+$/.test(platform)) {
+                document.documentElement.classList.add(`native-${platform}`);
+            }
+        } catch (error) {
+            console.warn('No se pudo detectar la plataforma nativa:', error);
+        }
+    };
     if(window.pywebview) markNativeShell();
     window.addEventListener('pywebviewready', markNativeShell, { once: true });
 

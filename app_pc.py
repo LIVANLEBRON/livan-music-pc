@@ -25,14 +25,20 @@ from yt_server import run_server, PORT
 class DesktopApi:
     """Puente mínimo para usar el selector nativo de carpetas."""
 
+    def get_platform(self):
+        if sys.platform.startswith('linux'):
+            return 'linux'
+        if os.name == 'nt':
+            return 'windows'
+        return 'other'
+
     def select_folder(self):
         if webview is None or not webview.windows:
             return ""
         try:
             window = webview.windows[0]
-            dialog_type = getattr(webview, "FOLDER_DIALOG", None)
-            if dialog_type is None:
-                dialog_type = webview.FileDialog.FOLDER
+            file_dialog = getattr(webview, "FileDialog", None)
+            dialog_type = file_dialog.FOLDER if file_dialog else getattr(webview, "FOLDER_DIALOG")
             result = window.create_file_dialog(dialog_type)
             if isinstance(result, (list, tuple)):
                 return result[0] if result else ""
