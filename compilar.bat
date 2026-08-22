@@ -1,20 +1,39 @@
 @echo off
+setlocal
 echo =================================================
 echo Compilando Livan Music para Windows...
-echo Por favor, espera aproximadamente 1 a 2 minutos.
+echo Preparando una aplicacion autocontenida.
 echo =================================================
 
-pip install pyinstaller pywebview
+where powershell.exe >nul 2>&1
+if errorlevel 1 (
+  echo ERROR: PowerShell no esta disponible.
+  exit /b 1
+)
 
-pyinstaller --noconsole --onefile --clean -y ^
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0preparar-windows.ps1"
+if errorlevel 1 (
+  echo ERROR: No se pudieron preparar yt-dlp, FFmpeg y Deno.
+  exit /b 1
+)
+
+py -m pip install --upgrade pyinstaller pywebview
+if errorlevel 1 exit /b 1
+
+py -m PyInstaller --noconsole --onefile --clean -y ^
   --add-data "public;public" ^
-  --add-data "ffmpeg.exe;." ^
-  --add-data "yt-dlp.exe;." ^
+  --add-binary "ffmpeg.exe;." ^
+  --add-binary "yt-dlp.exe;." ^
+  --add-binary "deno.exe;." ^
   --add-data "icon.ico;." ^
-  --add-data "yt_server.py;." ^
   --icon=icon.ico ^
   --name "Livan Music" ^
   app_pc.py
+
+if errorlevel 1 (
+  echo ERROR: PyInstaller no pudo crear el ejecutable.
+  exit /b 1
+)
 
 echo.
 echo =================================================
@@ -23,3 +42,4 @@ echo Tu archivo .exe se encuentra en la carpeta "dist".
 echo Copia "dist\Livan Music.exe" donde quieras y ejecutalo.
 echo =================================================
 pause
+endlocal

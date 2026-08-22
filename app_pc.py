@@ -1,14 +1,39 @@
-import webview
 import threading
 import sys
 import os
 import time
 import urllib.request
+import webbrowser
+
+try:
+    import webview
+except ImportError:
+    webview = None
 
 # Aseguramos que Python encuentre yt_server.py
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from yt_server import run_server, PORT
+
+
+class DesktopApi:
+    """Puente mínimo para usar el selector nativo de carpetas."""
+
+    def select_folder(self):
+        if webview is None or not webview.windows:
+            return ""
+        try:
+            window = webview.windows[0]
+            dialog_type = getattr(webview, "FOLDER_DIALOG", None)
+            if dialog_type is None:
+                dialog_type = webview.FileDialog.FOLDER
+            result = window.create_file_dialog(dialog_type)
+            if isinstance(result, (list, tuple)):
+                return result[0] if result else ""
+            return result or ""
+        except Exception as error:
+            print(f"No se pudo abrir el selector de carpetas: {error}")
+            return ""
 
 def start_background_server():
     print("Iniciando motor de descargas...")
@@ -37,20 +62,25 @@ if __name__ == '__main__':
     if not ready:
         print("ADVERTENCIA: El servidor tardó demasiado. Abriendo de todas formas...")
 
-    # 3. Ruta del ícono
-    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'icon.ico')
+    url = f'http://127.0.0.1:{PORT}'
 
-    # 4. Abrir la ventana de la App
-    print("Abriendo aplicación de Windows...")
-    webview.create_window(
-        title='Livan Music', 
-        url=f'http://127.0.0.1:{PORT}',
-        width=1100,
-        height=750,
-        resizable=True,
-        background_color='#070B19'
-    )
-    
-    # Iniciar el motor gráfico con ícono
-    webview.start(icon=icon_path)
-
+    if webview is None:
+        # En Linux la interfaz web puede funcionar sin instalar pywebview.
+        print(f"Abriendo Livan Music en el navegador: {url}")
+        webbrowser.open(url)
+        server_thread.join()
+    else:
+        icon_name = 'icon.ico' if os.name == 'nt' else 'icon.png'
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), icon_name)
+        print("Abriendo Livan Music...")
+        webview.create_window(
+            title='Livan Music',
+            url=url,
+            width=1100,
+            height=750,
+            resizable=True,
+            background_color='#070B19',
+            js_api=DesktopApi()
+        )
+        start_options = {"icon": icon_path} if os.path.isfile(icon_path) else {}
+        webview.start(**start_options)

@@ -7,6 +7,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let repeatMode = 0; // 0: off, 1: all, 2: one
     let playlistsData = { "Favoritos": [], "Mis Playlists": {} };
     let shuffleHistory = [];
+    let locationSettings = null;
+
+    const songKey = song => `${song.source_id || ''}::${song.filename || ''}`;
 
     // --- Tab Navigation ---
     const tabs = document.querySelectorAll('.nav-links li');
@@ -23,6 +26,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if(target === 'library') loadLibrary();
             if(target === 'playlists') renderPlaylistsTab();
+            if(target === 'settings') loadSettings();
+        });
+        tab.addEventListener('keydown', event => {
+            if(event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                tab.click();
+            }
         });
     });
 
@@ -84,6 +94,92 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function loadSettings() {
+        const status = document.getElementById('settings-status');
+        try {
+            const res = await fetch('/api/settings');
+            if(!res.ok) throw new Error('No se pudo cargar la configuración');
+            locationSettings = await res.json();
+            renderSettings();
+            status.textContent = '';
+            status.className = 'settings-status';
+        } catch (error) {
+            status.textContent = error.message;
+            status.className = 'settings-status error';
+        }
+    }
+
+    function renderSettings() {
+        if(!locationSettings) return;
+        document.getElementById('download-path').value = locationSettings.download_dir;
+        document.getElementById('default-music-path').textContent = locationSettings.default_download_dir;
+        document.getElementById('locations-count').textContent = locationSettings.library_dirs.length;
+
+        const list = document.getElementById('library-dirs-list');
+        list.innerHTML = '';
+        locationSettings.library_dirs.forEach(directory => {
+            const item = document.createElement('article');
+            item.className = 'location-row';
+            item.innerHTML = `
+                <div class="location-row-icon"><span class="material-symbols-outlined">${directory.is_download ? 'download' : 'folder'}</span></div>
+                <div class="location-row-copy"><strong>${escapeHtml(directory.name)}</strong><span>${escapeHtml(directory.path)}</span></div>
+                ${directory.is_download
+                    ? '<span class="location-type">Descargas</span>'
+                    : '<button class="remove-location icon-button" type="button" title="Quitar esta carpeta" aria-label="Quitar esta carpeta"><span class="material-symbols-outlined">close</span></button>'}
+            `;
+            if(!directory.is_download) {
+                item.querySelector('.remove-location').onclick = () => updateSettings('remove_library', directory.path, 'Carpeta retirada de la biblioteca.');
+            }
+            list.appendChild(item);
+        });
+    }
+
+    function escapeHtml(value) {
+        const element = document.createElement('span');
+        element.textContent = value ?? '';
+        return element.innerHTML;
+    }
+
+    async function updateSettings(action, path, successMessage) {
+        const status = document.getElementById('settings-status');
+        if(!path || !path.trim()) {
+            status.textContent = 'Selecciona o escribe una ruta válida.';
+            status.className = 'settings-status error';
+            return;
+        }
+        status.textContent = 'Guardando…';
+        status.className = 'settings-status';
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, path: path.trim() })
+            });
+            const data = await res.json();
+            if(!res.ok || data.error) throw new Error(data.error || 'No se pudo guardar la ubicación');
+            locationSettings = data;
+            renderSettings();
+            document.getElementById('library-path').value = '';
+            status.textContent = successMessage;
+            status.className = 'settings-status success';
+            await loadLibrary();
+        } catch (error) {
+            status.textContent = error.message;
+            status.className = 'settings-status error';
+        }
+    }
+
+    async function chooseFolder(inputId) {
+        const input = document.getElementById(inputId);
+        if(window.pywebview?.api?.select_folder) {
+            const selected = await window.pywebview.api.select_folder();
+            if(selected) input.value = selected;
+            return;
+        }
+        const selected = prompt('Escribe o pega la ruta completa de la carpeta:', input.value);
+        if(selected !== null) input.value = selected.trim();
+    }
+
     // --- Renderizado de Biblioteca ---
     function renderLibrary(filterText = '') {
         const list = document.getElementById('library-list');
@@ -97,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentPlaylist.forEach((song, index) => {
             const searchText = `${song.title} ${song.artist}`.toLowerCase();
             if(filterText && !searchText.includes(filterText.toLowerCase())) return;
-            const isFav = playlistsData["Favoritos"].some(s => s.filename === song.filename);
+            const isFav = playlistsData["Favoritos"].some(s => songKey(s) === songKey(song));
 
             const div = document.createElement('div');
             div.className = 'song-card';
@@ -144,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const res = await fetch('/api/delete_song', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ filename: song.filename })
+                            body: JSON.stringify({ filename: song.filename, source_id: song.source_id })
                         });
                         const data = await res.json();
                         if (data.status === 'ok') {
@@ -170,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Favoritos Logic ---
     async function toggleFavorite(song) {
-        const index = playlistsData["Favoritos"].findIndex(s => s.filename === song.filename);
+        const index = playlistsData["Favoritos"].findIndex(s => songKey(s) === songKey(song));
         if (index > -1) {
             playlistsData["Favoritos"].splice(index, 1);
         } else {
@@ -183,7 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updatePlayerFavIcon() {
         if(currentIndex === -1 || !activePlaylistView[currentIndex]) return;
         const currentSong = activePlaylistView[currentIndex];
-        const isFav = playlistsData["Favoritos"].some(s => s.filename === currentSong.filename);
+        const isFav = playlistsData["Favoritos"].some(s => songKey(s) === songKey(currentSong));
         btnFav.style.color = isFav ? '#EF4444' : '#475569';
         btnFav.innerHTML = `<span class="material-symbols-outlined">${isFav ? 'favorite' : 'favorite_border'}</span>`;
     }
@@ -221,8 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
             playerIcon.style.display = 'block';
         }
         
-        audio.src = `/stream?file=${encodeURIComponent(song.filename)}`;
-        audio.play();
+        audio.src = song.stream_url || `/stream?file=${encodeURIComponent(song.filename)}`;
+        audio.play().catch(error => console.error('No se pudo iniciar la reproducción:', error));
         btnPlay.innerHTML = '<span class="material-symbols-outlined">pause</span>';
     }
 
@@ -417,6 +513,19 @@ document.addEventListener('DOMContentLoaded', () => {
         loadLibrary();
     };
 
+    document.getElementById('btn-browse-download').onclick = () => chooseFolder('download-path');
+    document.getElementById('btn-browse-library').onclick = () => chooseFolder('library-path');
+    document.getElementById('btn-save-download').onclick = () => updateSettings(
+        'set_download',
+        document.getElementById('download-path').value,
+        'Nueva carpeta de descargas guardada.'
+    );
+    document.getElementById('btn-add-library').onclick = () => updateSettings(
+        'add_library',
+        document.getElementById('library-path').value,
+        'Carpeta añadida. La música ya está disponible.'
+    );
+
     document.getElementById('btn-search').onclick = async () => {
         const query = document.getElementById('search-input').value;
         if(!query) return;
@@ -531,7 +640,12 @@ document.addEventListener('DOMContentLoaded', () => {
         evtSource.onmessage = function(event) {
             const data = JSON.parse(event.data);
             
-            if (data.status === 'downloading') {
+            if (data.status === 'preparing') {
+                historyItem.status = 'preparing';
+                historyItem.statusText = data.text;
+                historyItem.downloadDir = data.download_dir;
+                updateHistoryUI();
+            } else if (data.status === 'downloading') {
                 const match = data.text.match(/\[download\]\s+([\d\.]+)\%/);
                 if(match) {
                     historyItem.progress = parseFloat(match[1]);
@@ -546,7 +660,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateHistoryUI();
             } else if (data.status === 'done') {
                 historyItem.status = 'done';
-                historyItem.statusText = 'Completado';
+                historyItem.statusText = data.text || 'Descarga completada';
+                historyItem.file = data.file;
                 updateHistoryUI();
                 btn.innerHTML = '<span class="material-symbols-outlined">check_circle</span>';
                 btn.style.background = 'rgba(16, 185, 129, 0.2)';
@@ -578,5 +693,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Inicializar app
-    loadPlaylists().then(() => loadLibrary());
+    Promise.all([loadPlaylists(), loadSettings()]).then(() => loadLibrary());
 });

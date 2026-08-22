@@ -3,155 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Livan Music Player</title>
+    <meta name="theme-color" content="#08090c">
+    <title>Livan Music</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,-50..200&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <!-- Iconos Material Symbols -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
 </head>
 <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
     <div class="app-container">
-        <!-- Sidebar Navigation -->
-        <nav class="sidebar">
+        <nav class="sidebar" aria-label="Navegación principal">
             <div class="brand">
-                <h1>Livan <span>Music</span></h1>
+                <div class="brand-mark" aria-hidden="true"><span class="material-symbols-outlined">graphic_eq</span></div>
+                <div class="brand-copy"><h1>Livan<span>Music</span></h1><small>Personal studio</small></div>
             </div>
+            <div class="nav-kicker">Tu espacio</div>
             <ul class="nav-links">
-                <li class="active" data-tab="home"><span class="material-symbols-outlined">home</span> Inicio</li>
-                <li data-tab="library"><span class="material-symbols-outlined">library_music</span> Canciones Locales</li>
-                <li data-tab="search"><span class="material-symbols-outlined">search</span> Buscar y Descargar</li>
-                <li data-tab="playlists"><span class="material-symbols-outlined">favorite</span> Mis Playlists</li>
-                <li data-tab="history"><span class="material-symbols-outlined">history</span> Historial</li>
+                <li class="active" data-tab="home" tabindex="0" aria-label="Inicio" title="Inicio"><span class="nav-icon material-symbols-outlined">home</span><span class="nav-label">Inicio</span></li>
+                <li data-tab="library" tabindex="0" aria-label="Canciones locales" title="Canciones locales"><span class="nav-icon material-symbols-outlined">library_music</span><span class="nav-label">Canciones locales</span></li>
+                <li data-tab="search" tabindex="0" aria-label="Buscar y descargar" title="Buscar y descargar"><span class="nav-icon material-symbols-outlined">travel_explore</span><span class="nav-label">Buscar y descargar</span></li>
+                <li data-tab="playlists" tabindex="0" aria-label="Mis playlists" title="Mis playlists"><span class="nav-icon material-symbols-outlined">queue_music</span><span class="nav-label">Mis playlists</span></li>
+                <li data-tab="settings" tabindex="0" aria-label="Ubicaciones" title="Ubicaciones"><span class="nav-icon material-symbols-outlined">folder_managed</span><span class="nav-label">Ubicaciones</span></li>
+                <li data-tab="history" tabindex="0" aria-label="Historial" title="Historial"><span class="nav-icon material-symbols-outlined">history</span><span class="nav-label">Historial</span></li>
             </ul>
+            <div class="sidebar-status">
+                <span class="status-dot"></span>
+                <div><strong>Biblioteca local</strong><small>Conectada y lista</small></div>
+                <span class="material-symbols-outlined">verified</span>
+            </div>
         </nav>
 
-        <!-- Main Content Area -->
         <main class="content-area">
-            
-            <!-- Home Tab -->
             <section id="tab-home" class="tab-content active">
-                <h2>Tu Música, Livan</h2>
-                <p>Bienvenido a tu reproductor de PC. Aquí la música no tiene límites.</p>
-                <div class="stats-cards">
-                    <div class="card" id="card-songs">
-                        <h3>0</h3>
-                        <p>Canciones Locales</p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Library Tab -->
-            <section id="tab-library" class="tab-content">
-                <div class="header-row" style="flex-wrap: wrap; gap: 15px;">
-                    <h2>Canciones <span class="count" id="library-count">0</span></h2>
-                    
-                    <div class="library-controls">
-                        <div class="library-search-wrap">
-                            <span class="material-symbols-outlined search-icon-inner">search</span>
-                            <input type="text" id="library-search" placeholder="Filtrar por nombre..." class="library-search-input">
+                <div class="home-hero">
+                    <div class="hero-copy">
+                        <div class="eyebrow"><span></span> Tu biblioteca privada</div>
+                        <h2>La música que amas,<br><em>en un solo lugar.</em></h2>
+                        <p>Escucha tu colección, descubre nuevos sonidos y conserva cada canción en tu propio equipo.</p>
+                        <div class="hero-chips" aria-label="Características">
+                            <span><i class="material-symbols-outlined">offline_bolt</i> Sin conexión</span>
+                            <span><i class="material-symbols-outlined">shield_lock</i> Biblioteca privada</span>
+                            <span><i class="material-symbols-outlined">high_quality</i> Audio original</span>
                         </div>
-                        <button id="btn-refresh" class="btn-refresh" title="Actualizar biblioteca">
-                            <span class="material-symbols-outlined refresh-icon">refresh</span>
-                        </button>
+                    </div>
+                    <div class="hero-visual" aria-hidden="true">
+                        <div class="vinyl-ring ring-one"></div><div class="vinyl-ring ring-two"></div>
+                        <div class="hero-album">
+                            <div class="hero-album-glow"></div><span class="material-symbols-outlined">equalizer</span>
+                            <div class="hero-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                        </div>
                     </div>
                 </div>
-                <div class="song-grid" id="library-list">
-                    <p class="loading-text">Cargando biblioteca...</p>
+                <div class="section-heading compact-heading">
+                    <div><span class="section-label">Resumen</span><h3>Tu colección</h3></div>
+                    <span class="live-badge"><i></i> En este dispositivo</span>
+                </div>
+                <div class="stats-cards">
+                    <div class="card collection-card" id="card-songs">
+                        <div class="card-icon"><span class="material-symbols-outlined">album</span></div>
+                        <div class="card-copy"><h3>0</h3><p>Canciones locales</p></div>
+                        <span class="card-arrow material-symbols-outlined">arrow_outward</span>
+                    </div>
+                    <div class="card feature-card">
+                        <div class="card-icon violet"><span class="material-symbols-outlined">cloud_download</span></div>
+                        <div class="card-copy"><strong>Descubre sin límites</strong><p>Busca en YouTube y amplía tu biblioteca.</p></div>
+                    </div>
+                    <div class="card feature-card">
+                        <div class="card-icon amber"><span class="material-symbols-outlined">favorite</span></div>
+                        <div class="card-copy"><strong>Siempre a tu manera</strong><p>Favoritos, playlists y controles precisos.</p></div>
+                    </div>
                 </div>
             </section>
 
-            <!-- Playlists Tab -->
-            <section id="tab-playlists" class="tab-content">
-                <div class="header-row">
-                    <h2>Mis Playlists</h2>
-                    <button id="btn-new-playlist" class="btn-primary" style="background: linear-gradient(135deg, #10B981, #059669);">
-                        <span class="material-symbols-outlined" style="vertical-align: middle;">add</span> Nueva Playlist
-                    </button>
+            <section id="tab-library" class="tab-content">
+                <div class="section-heading library-heading">
+                    <div><span class="section-label">Colección personal</span><h2>Canciones <span class="count" id="library-count">0</span></h2><p>Todo tu audio, disponible directamente en este dispositivo.</p></div>
+                    <div class="library-controls">
+                        <label class="library-search-wrap" for="library-search"><span class="material-symbols-outlined search-icon-inner">search</span><input type="text" id="library-search" placeholder="Filtrar por nombre..." class="library-search-input"></label>
+                        <button id="btn-refresh" class="icon-button btn-refresh" title="Actualizar biblioteca" aria-label="Actualizar biblioteca"><span class="material-symbols-outlined refresh-icon">refresh</span></button>
+                    </div>
                 </div>
-                
-                <!-- Contenedor visual de playlists -->
-                <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 30px;" id="playlists-grid">
-                    <!-- Favoritos siempre primero -->
-                </div>
-                
-                <h3 id="playlist-view-title" style="margin-bottom: 15px; color: var(--accent); display: none;">Contenido de la Playlist</h3>
-                <div class="song-list" id="playlist-content-list">
-                    <p class="loading-text">Selecciona una playlist para ver sus canciones.</p>
-                </div>
+                <div class="song-grid" id="library-list"><p class="loading-text">Cargando biblioteca...</p></div>
             </section>
 
-            <!-- Search Tab -->
             <section id="tab-search" class="tab-content">
-                <h2>Buscar en YouTube</h2>
-                <div class="search-bar">
-                    <input type="text" id="search-input" placeholder="Buscar canciones, artistas...">
-                    <button id="btn-search" class="btn-primary"><span class="material-symbols-outlined">search</span></button>
+                <div class="search-hero">
+                    <span class="section-label">Explora nuevos sonidos</span><h2>Buscar y descargar</h2><p>Encuentra una canción, un artista o pega un enlace de YouTube.</p>
+                    <div class="search-bar">
+                        <span class="material-symbols-outlined">search</span><input type="text" id="search-input" placeholder="¿Qué quieres escuchar hoy?">
+                        <button id="btn-search" class="btn-primary"><span>Buscar</span><i class="material-symbols-outlined">arrow_forward</i></button>
+                    </div>
+                    <div class="search-hint"><span class="material-symbols-outlined">lightbulb</span> También puedes pegar directamente la URL de un video.</div>
                 </div>
-                <div id="search-status" class="status-msg"></div>
-                
-                <div class="song-grid" id="search-results"></div>
+                <div id="search-status" class="status-msg"></div><div class="song-grid" id="search-results"></div>
             </section>
 
-            <!-- History Tab -->
+            <section id="tab-playlists" class="tab-content">
+                <div class="section-heading">
+                    <div><span class="section-label">Organiza tu sonido</span><h2>Mis playlists</h2><p>Colecciones creadas por ti para cada momento.</p></div>
+                    <button id="btn-new-playlist" class="btn-primary"><span class="material-symbols-outlined">add</span>Nueva playlist</button>
+                </div>
+                <div class="playlists-grid" id="playlists-grid"></div>
+                <h3 id="playlist-view-title" class="playlist-view-title">Contenido de la playlist</h3>
+                <div class="song-list" id="playlist-content-list"><p class="loading-text">Selecciona una playlist para ver sus canciones.</p></div>
+            </section>
+
             <section id="tab-history" class="tab-content">
-                <div class="header-row">
-                    <h2>Historial de Descargas</h2>
-                    <button id="btn-clear-history" class="btn-primary" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">
-                        <span class="material-symbols-outlined" style="vertical-align: middle;">delete</span> Limpiar
-                    </button>
+                <div class="section-heading">
+                    <div><span class="section-label">Actividad reciente</span><h2>Historial de descargas</h2><p>Sigue el progreso de las canciones descargadas en esta sesión.</p></div>
+                    <button id="btn-clear-history" class="btn-secondary"><span class="material-symbols-outlined">delete_sweep</span>Limpiar</button>
                 </div>
-                <div class="song-list" id="history-list">
-                    <p class="loading-text">Aún no has descargado nada en esta sesión.</p>
+                <div class="song-list" id="history-list"><p class="loading-text">Aún no has descargado nada en esta sesión.</p></div>
+            </section>
+
+            <section id="tab-settings" class="tab-content">
+                <div class="section-heading">
+                    <div><span class="section-label">Biblioteca y almacenamiento</span><h2>Ubicaciones</h2><p>Decide dónde guardar las descargas y conecta otras carpetas que ya contienen música. Ningún archivo se mueve.</p></div>
                 </div>
+                <div class="settings-layout">
+                    <article class="location-panel download-panel">
+                        <div class="location-panel-head">
+                            <div class="location-icon"><span class="material-symbols-outlined">download_for_offline</span></div>
+                            <div><span class="location-kicker">Destino principal</span><h3>Carpeta de descargas</h3></div>
+                            <span class="location-badge">Incluida en biblioteca</span>
+                        </div>
+                        <p>Las canciones nuevas se guardarán aquí. De forma predeterminada usamos una carpeta de LivanMusic dentro de Música.</p>
+                        <div class="path-editor">
+                            <span class="material-symbols-outlined">folder</span>
+                            <input id="download-path" type="text" spellcheck="false" aria-label="Carpeta de descargas">
+                            <button id="btn-browse-download" class="btn-secondary" type="button"><span class="material-symbols-outlined">folder_open</span>Elegir</button>
+                            <button id="btn-save-download" class="btn-primary" type="button"><span class="material-symbols-outlined">check</span>Guardar</button>
+                        </div>
+                        <div class="default-path-note"><span class="material-symbols-outlined">music_note</span>Predeterminada: <strong id="default-music-path">Cargando…</strong></div>
+                    </article>
+
+                    <article class="location-panel library-panel">
+                        <div class="location-panel-head">
+                            <div class="location-icon cyan"><span class="material-symbols-outlined">library_add</span></div>
+                            <div><span class="location-kicker">Fuentes adicionales</span><h3>Añadir música existente</h3></div>
+                        </div>
+                        <p>Señala cualquier carpeta y Livan Music revisará también sus subcarpetas. Tu música permanece en su ubicación original.</p>
+                        <div class="path-editor">
+                            <span class="material-symbols-outlined">folder_copy</span>
+                            <input id="library-path" type="text" spellcheck="false" placeholder="Ruta de otra carpeta con música" aria-label="Nueva carpeta de música">
+                            <button id="btn-browse-library" class="btn-secondary" type="button"><span class="material-symbols-outlined">folder_open</span>Elegir</button>
+                            <button id="btn-add-library" class="btn-primary" type="button"><span class="material-symbols-outlined">add</span>Añadir</button>
+                        </div>
+                    </article>
+
+                </div>
+                <div class="locations-heading"><div><span class="section-label">Carpetas activas</span><h3>Tu biblioteca está conectada a</h3></div><span id="locations-count" class="count">0</span></div>
+                <div id="library-dirs-list" class="locations-list"><p class="loading-text">Cargando ubicaciones…</p></div>
+                <div id="settings-status" class="settings-status" role="status" aria-live="polite"></div>
             </section>
         </main>
     </div>
 
-    <!-- Bottom Player -->
     <div class="bottom-player">
         <div class="now-playing">
-            <div class="album-art" id="player-art" style="overflow: hidden;">
-                <img id="player-img" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-                <span id="player-art-icon">🎵</span>
+            <div class="album-art" id="player-art">
+                <img id="player-img" class="player-cover" src="" alt="Portada de la canción"><span id="player-art-icon" class="material-symbols-outlined">music_note</span>
+                <div class="playing-bars"><i></i><i></i><i></i></div>
             </div>
-            <div class="song-info">
-                <h4 id="player-title">Selecciona una canción</h4>
-                <p id="player-artist">-</p>
-            </div>
-            <!-- Botón corazón en el reproductor -->
-            <button id="btn-player-fav" class="control-btn" style="margin-left: 15px; color: #475569;" title="Añadir a Favoritos">
-                <span class="material-symbols-outlined">favorite</span>
-            </button>
+            <div class="song-info"><span class="now-label">Reproduciendo ahora</span><h4 id="player-title">Selecciona una canción</h4><p id="player-artist">Tu biblioteca está lista</p></div>
+            <button id="btn-player-fav" class="control-btn favorite-control" title="Añadir a favoritos" aria-label="Añadir a favoritos"><span class="material-symbols-outlined">favorite</span></button>
         </div>
-        
         <div class="player-controls">
             <div class="buttons">
-                <button id="btn-shuffle" class="control-btn" title="Aleatorio"><span class="material-symbols-outlined">shuffle</span></button>
-                <button id="btn-prev" class="control-btn"><span class="material-symbols-outlined">skip_previous</span></button>
-                <button id="btn-play" class="control-btn play-btn"><span class="material-symbols-outlined">play_arrow</span></button>
-                <button id="btn-next" class="control-btn"><span class="material-symbols-outlined">skip_next</span></button>
-                <button id="btn-repeat" class="control-btn" title="Repetir"><span class="material-symbols-outlined">repeat</span></button>
+                <button id="btn-shuffle" class="control-btn" title="Aleatorio" aria-label="Aleatorio"><span class="material-symbols-outlined">shuffle</span></button>
+                <button id="btn-prev" class="control-btn" title="Anterior" aria-label="Canción anterior"><span class="material-symbols-outlined">skip_previous</span></button>
+                <button id="btn-play" class="control-btn play-btn" title="Reproducir" aria-label="Reproducir"><span class="material-symbols-outlined">play_arrow</span></button>
+                <button id="btn-next" class="control-btn" title="Siguiente" aria-label="Siguiente canción"><span class="material-symbols-outlined">skip_next</span></button>
+                <button id="btn-repeat" class="control-btn" title="Repetir" aria-label="Repetir"><span class="material-symbols-outlined">repeat</span></button>
             </div>
-            <div class="progress-container">
-                <span id="time-current">0:00</span>
-                <input type="range" id="progress-bar" value="0" min="0" max="100">
-                <span id="time-total">0:00</span>
-            </div>
+            <div class="progress-container"><span id="time-current">0:00</span><input type="range" id="progress-bar" value="0" min="0" max="100" aria-label="Progreso de reproducción"><span id="time-total">0:00</span></div>
         </div>
-        
-        <div class="volume-control" style="gap: 20px;">
-            <button id="btn-speed" class="control-btn" style="font-size: 14px; font-weight: bold; width: 45px; color: var(--text-main); border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);" title="Velocidad de reproducción">1x</button>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span class="material-symbols-outlined">volume_up</span>
-                <input type="range" id="volume-bar" value="100" min="0" max="100" style="width: 100px;">
-            </div>
+        <div class="volume-control">
+            <button id="btn-speed" class="control-btn speed-control" title="Velocidad de reproducción">1x</button>
+            <div class="volume-slider"><span class="material-symbols-outlined">volume_up</span><input type="range" id="volume-bar" value="100" min="0" max="100" aria-label="Volumen"></div>
         </div>
-        
-        <!-- Elemento de audio invisible -->
         <audio id="audio-player"></audio>
     </div>
-
     <script src="script.js"></script>
 </body>
 </html>

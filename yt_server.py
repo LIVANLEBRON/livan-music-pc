@@ -1,14 +1,21 @@
-import subprocess, json, os, socket, tempfile
-from http.server import SimpleHTTPRequestHandler, HTTPServer
-from urllib.parse import urlparse, parse_qs
-import mimetypes
+import subprocess, json, os, socket, tempfile, shutil
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs, urlencode
 
 import sys
 
+from library_config import (
+    PLAYLISTS_FILE,
+    add_library_dir,
+    describe_library_dirs,
+    get_download_dir,
+    public_settings,
+    remove_library_dir,
+    resolve_library_file,
+    set_download_dir,
+)
+
 PORT = int(os.environ.get("PORT", 8642))
-# Carpeta permanente para la música de la PC
-PC_MUSIC_DIR = os.path.join(os.path.expanduser("~"), "Music", "LivanMusic")
-os.makedirs(PC_MUSIC_DIR, exist_ok=True)
 
 # Carpeta temporal para la app de Android (para borrar tras enviar)
 ANDROID_TEMP_DIR = os.path.join(tempfile.gettempdir(), "YTDownloads")
@@ -22,15 +29,44 @@ else:
     application_path = os.path.dirname(os.path.abspath(__file__))
     exe_dir = application_path
 
-# Ruta a yt-dlp y ffmpeg empaquetados
-YTDLP_PATH = os.path.join(exe_dir, "yt-dlp.exe")
-FFMPEG_PATH = os.path.join(exe_dir, "ffmpeg.exe")
+def find_tool(name):
+    """Encuentra el binario empaquetado en Windows o el instalado en Linux."""
+    candidates = [
+        os.path.join(exe_dir, f"{name}.exe"),
+        os.path.join(application_path, f"{name}.exe"),
+        shutil.which(name),
+        shutil.which(f"{name}.exe"),
+    ]
+    return next((path for path in candidates if path and os.path.isfile(path)), name)
 
-# Fallback: si no existe en exe_dir, buscar en _MEIPASS
-if not os.path.exists(YTDLP_PATH):
-    YTDLP_PATH = os.path.join(application_path, "yt-dlp.exe")
-if not os.path.exists(FFMPEG_PATH):
-    FFMPEG_PATH = os.path.join(application_path, "ffmpeg.exe")
+
+YTDLP_PATH = find_tool("yt-dlp")
+FFMPEG_PATH = find_tool("ffmpeg")
+
+
+def youtube_runtime_args():
+    """Activa el solucionador JS que YouTube exige en versiones actuales."""
+    args = ["--remote-components", "ejs:github"]
+    for runtime in ("deno", "node"):
+        executable = f"{runtime}.exe" if os.name == "nt" else runtime
+        candidates = (
+            os.path.join(exe_dir, executable),
+            os.path.join(application_path, executable),
+            shutil.which(runtime),
+        )
+        runtime_path = next((path for path in candidates if path and os.path.isfile(path)), None)
+        if runtime_path:
+            args.extend(["--js-runtimes", f"{runtime}:{runtime_path}"])
+            break
+    return args
+
+
+YOUTUBE_RUNTIME_ARGS = youtube_runtime_args()
+
+# CREATE_NO_WINDOW solo existe en Windows.
+SUBPROCESS_OPTIONS = {}
+if os.name == "nt":
+    SUBPROCESS_OPTIONS["creationflags"] = subprocess.CREATE_NO_WINDOW
 
 
 # Asegurarse de que exista la carpeta public
@@ -56,7 +92,16 @@ class Handler(SimpleHTTPRequestHandler):
         
         # API: Verificar estado
         if parsed.path == "/api/status":
-            self._json(200, {"status": "ok"})
+            self._json(200, {
+                "status": "ok",
+                "music_dir": str(get_download_dir()),
+                "yt_dlp": YTDLP_PATH,
+                "ffmpeg": FFMPEG_PATH,
+            })
+
+        # API: Configuración de descargas y carpetas de biblioteca
+        elif parsed.path == "/api/settings":
+            self._json(200, public_settings())
             
         # API: Búsqueda en YouTube
         elif parsed.path == "/search":
@@ -65,7 +110,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(400, {"error": "Falta q"})
             try:
                 cmd = [YTDLP_PATH, f"ytsearch15:{q}", "--flat-playlist", "-j", "--no-download", "--no-warnings"]
-                res = subprocess.run(cmd, capture_output=True, text=True, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+                res = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=30,
+                    **SUBPROCESS_OPTIONS
+                )
+                if res.returncode != 0:
+                    raise RuntimeError(res.stderr.strip() or "yt-dlp no pudo completar la búsqueda")
                 results = []
                 for line in res.stdout.strip().split("\n"):
                     if not line: continue
@@ -95,80 +145,129 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
-            self.send_header("Connection", "keep-alive")
+            # Es un flujo finito: al terminar la descarga cerramos la conexión.
+            self.send_header("Connection", "close")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             
             try:
                 url = f"https://www.youtube.com/watch?v={vid}"
+                download_dir = get_download_dir()
                 print(f"Descargando (SSE) en PC: {url}")
-                output = os.path.join(PC_MUSIC_DIR, "%(title)s - %(channel)s.%(ext)s")
+                print(f"Destino de descarga: {download_dir}")
+                output = os.path.join(download_dir, "%(title)s - %(channel)s.%(ext)s")
+
+                self._send_event({
+                    "status": "preparing",
+                    "text": f"Preparando descarga en {download_dir}",
+                    "download_dir": str(download_dir),
+                })
                 
                 cmd = [
-                    YTDLP_PATH, "-f", "18/best", 
+                    YTDLP_PATH, "-f", "bestaudio[ext=m4a]/bestaudio/best",
+                    *YOUTUBE_RUNTIME_ARGS,
+                    "--extractor-args", "youtube:player_client=web_embedded",
+                    "--force-ipv4",
                     "--extract-audio", "--audio-format", "m4a",
                     "--ffmpeg-location", FFMPEG_PATH,
                     "--write-thumbnail", "-o", output, 
-                    "--newline", "--no-playlist", "--no-warnings", 
-                    "--extractor-args", "youtube:player_client=android", url
+                    "--print", "after_move:__LIVAN_FILE__:%(filepath)s",
+                    "--newline", "--no-playlist", "--no-warnings", url
                 ]
                 
-                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, encoding="utf-8", errors="replace", creationflags=subprocess.CREATE_NO_WINDOW)
+                process = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, bufsize=1, encoding="utf-8", errors="replace",
+                    **SUBPROCESS_OPTIONS
+                )
                 
                 last_msg = "Fallo desconocido"
+                error_msg = ""
+                final_path = ""
                 for line in process.stdout:
                     if not line.strip(): continue
                     
                     last_msg = line.strip()
+                    if last_msg.startswith("__LIVAN_FILE__:"):
+                        final_path = last_msg.split(":", 1)[1]
+                    if "ERROR:" in last_msg:
+                        error_msg = last_msg
                     data_to_send = {"status": "processing", "text": last_msg}
                     
                     if "[download]" in line and "%" in line:
                         data_to_send["status"] = "downloading"
                         
-                    self.wfile.write(f"data: {json.dumps(data_to_send)}\n\n".encode())
-                    self.wfile.flush()
+                    self._send_event(data_to_send)
                 
                 process.wait()
                 if process.returncode == 0:
-                    self.wfile.write(f"data: {json.dumps({'status': 'done', 'text': 'Descarga Completada'})}\n\n".encode())
+                    destination = final_path or str(download_dir)
+                    self._send_event({
+                        "status": "done",
+                        "text": f"Guardada en: {destination}",
+                        "file": final_path,
+                        "download_dir": str(download_dir),
+                    })
                 else:
-                    self.wfile.write(f"data: {json.dumps({'status': 'error', 'text': f'Error: {last_msg[:60]}'})}\n\n".encode())
-                self.wfile.flush()
+                    detail = error_msg or last_msg
+                    self._send_event({"status": "error", "text": detail[:300]})
+                self.close_connection = True
                 
             except Exception as e:
-                self.wfile.write(f"data: {json.dumps({'status': 'error', 'text': str(e)})}\n\n".encode())
-                self.wfile.flush()
+                self._send_event({"status": "error", "text": str(e)[:300]})
+                self.close_connection = True
 
         # API: Obtener biblioteca de música local (para el reproductor web)
         elif parsed.path == "/library":
             songs = []
-            for f in os.listdir(PC_MUSIC_DIR):
-                if f.endswith(".m4a") or f.endswith(".mp3") or f.endswith(".mp4"):
-                    # Parsear nombre básico "Titulo - Artista.ext"
-                    base_name = f.rsplit(".", 1)[0]
-                    name_parts = base_name.split(" - ", 1)
-                    title = name_parts[0]
-                    artist = name_parts[1] if len(name_parts) > 1 else "Unknown"
-                    
-                    thumbnail_url = ""
-                    for ext in [".jpg", ".webp", ".png"]:
-                        if os.path.exists(os.path.join(PC_MUSIC_DIR, base_name + ext)):
-                            thumbnail_url = f"/stream?file={base_name + ext}"
-                            break
-                            
-                    songs.append({
-                        "filename": f,
-                        "title": title,
-                        "artist": artist,
-                        "thumbnail_url": thumbnail_url
-                    })
+            seen_files = set()
+            for source in describe_library_dirs():
+                source_dir = source["path"]
+                for root, dirs, files in os.walk(source_dir):
+                    dirs[:] = [directory for directory in dirs if not directory.startswith(".")]
+                    for filename in files:
+                        if not filename.lower().endswith((".m4a", ".mp3", ".mp4", ".wav", ".flac", ".ogg")):
+                            continue
+
+                        filepath = os.path.join(root, filename)
+                        file_key = os.path.normcase(os.path.realpath(filepath))
+                        if file_key in seen_files:
+                            continue
+                        seen_files.add(file_key)
+                        relative_name = os.path.relpath(filepath, source_dir)
+                        base_name = filename.rsplit(".", 1)[0]
+                        name_parts = base_name.split(" - ", 1)
+                        title = name_parts[0]
+                        artist = name_parts[1] if len(name_parts) > 1 else "Unknown"
+                        query = urlencode({"source": source["id"], "file": relative_name})
+
+                        thumbnail_url = ""
+                        for ext in [".jpg", ".jpeg", ".webp", ".png"]:
+                            thumbnail_path = os.path.join(root, base_name + ext)
+                            if os.path.isfile(thumbnail_path):
+                                thumbnail_relative = os.path.relpath(thumbnail_path, source_dir)
+                                thumbnail_query = urlencode({"source": source["id"], "file": thumbnail_relative})
+                                thumbnail_url = f"/stream?{thumbnail_query}"
+                                break
+
+                        songs.append({
+                            "filename": relative_name,
+                            "source_id": source["id"],
+                            "source_name": source["name"],
+                            "title": title,
+                            "artist": artist,
+                            "stream_url": f"/stream?{query}",
+                            "thumbnail_url": thumbnail_url,
+                        })
+            songs.sort(key=lambda song: (song["title"].casefold(), song["artist"].casefold()))
             self._json(200, {"songs": songs})
 
         # API: Stream audio local
         elif parsed.path.startswith("/stream"):
             filename = parse_qs(parsed.query).get("file", [""])[0]
-            filepath = os.path.join(PC_MUSIC_DIR, filename)
-            if not os.path.exists(filepath):
+            source = parse_qs(parsed.query).get("source", [""])[0]
+            filepath = resolve_library_file(source, filename)
+            if not filepath:
                 self._json(404, {"error": "Archivo no encontrado"})
                 return
             
@@ -182,8 +281,16 @@ class Handler(SimpleHTTPRequestHandler):
                     content_type = "image/webp"
                 elif filename.lower().endswith(".png"):
                     content_type = "image/png"
+                elif filename.lower().endswith((".m4a", ".mp4")):
+                    content_type = "audio/mp4"
+                elif filename.lower().endswith(".wav"):
+                    content_type = "audio/wav"
+                elif filename.lower().endswith(".flac"):
+                    content_type = "audio/flac"
+                elif filename.lower().endswith(".ogg"):
+                    content_type = "audio/ogg"
                 else:
-                    content_type = "audio/mp4" if filename.endswith(".m4a") else "audio/mpeg"
+                    content_type = "audio/mpeg"
                     
                 self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(filesize))
@@ -198,9 +305,8 @@ class Handler(SimpleHTTPRequestHandler):
 
         # API: Obtener Playlists
         elif parsed.path == "/api/playlists":
-            playlist_file = os.path.join(PC_MUSIC_DIR, "playlists.json")
-            if os.path.exists(playlist_file):
-                with open(playlist_file, "r", encoding="utf-8") as f:
+            if PLAYLISTS_FILE.exists():
+                with PLAYLISTS_FILE.open("r", encoding="utf-8") as f:
                     data = json.load(f)
             else:
                 data = {"Favoritos": [], "Mis Playlists": {}}
@@ -234,8 +340,8 @@ class Handler(SimpleHTTPRequestHandler):
             body = self.rfile.read(length)
             data = json.loads(body.decode('utf-8'))
             
-            playlist_file = os.path.join(PC_MUSIC_DIR, "playlists.json")
-            with open(playlist_file, "w", encoding="utf-8") as f:
+            PLAYLISTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with PLAYLISTS_FILE.open("w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
                 
             self._json(200, {"status": "ok"})
@@ -247,15 +353,16 @@ class Handler(SimpleHTTPRequestHandler):
             data = json.loads(body.decode('utf-8'))
             
             filename = data.get("filename", "")
+            source = data.get("source_id", "")
             if filename:
-                filepath = os.path.join(PC_MUSIC_DIR, filename)
-                if os.path.exists(filepath):
+                filepath = resolve_library_file(source, filename)
+                if filepath:
                     try:
                         os.remove(filepath)
                         # También eliminar la portada si existe
-                        base_name = filename.rsplit(".", 1)[0]
-                        for ext in [".jpg", ".webp", ".png"]:
-                            thumb_path = os.path.join(PC_MUSIC_DIR, base_name + ext)
+                        base_name = str(filepath.with_suffix(""))
+                        for ext in [".jpg", ".jpeg", ".webp", ".png"]:
+                            thumb_path = base_name + ext
                             if os.path.exists(thumb_path):
                                 os.remove(thumb_path)
                         self._json(200, {"status": "ok"})
@@ -264,6 +371,24 @@ class Handler(SimpleHTTPRequestHandler):
                         self._json(500, {"error": str(e)})
                         return
             self._json(400, {"error": "Archivo no encontrado"})
+
+        elif parsed.path == "/api/settings":
+            length = int(self.headers.get('Content-Length', 0))
+            try:
+                data = json.loads(self.rfile.read(length).decode("utf-8"))
+                action = data.get("action", "")
+                path = data.get("path", "")
+                if action == "set_download":
+                    settings = set_download_dir(path)
+                elif action == "add_library":
+                    settings = add_library_dir(path)
+                elif action == "remove_library":
+                    settings = remove_library_dir(path)
+                else:
+                    return self._json(400, {"error": "Acción de configuración no válida"})
+                self._json(200, settings)
+            except (ValueError, OSError, PermissionError) as error:
+                self._json(400, {"error": str(error)})
             
         else:
             self.send_error(404)
@@ -274,8 +399,18 @@ class Handler(SimpleHTTPRequestHandler):
             print(f"Descargando: {url}")
             output = os.path.join(out_dir, "%(id)s.%(ext)s")
             
-            cmd = [YTDLP_PATH, "-f", "bestaudio[ext=m4a]/bestaudio", "-o", output, "--no-playlist", "--no-mtime", "--no-warnings", "--print", "after_move:filepath", url]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=300, creationflags=subprocess.CREATE_NO_WINDOW)
+            cmd = [
+                YTDLP_PATH, "-f", "bestaudio[ext=m4a]/bestaudio/best",
+                *YOUTUBE_RUNTIME_ARGS,
+                "--extractor-args", "youtube:player_client=web_embedded",
+                "--force-ipv4",
+                "-o", output, "--no-playlist", "--no-mtime", "--no-warnings",
+                "--print", "after_move:filepath", url,
+            ]
+            res = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=300,
+                **SUBPROCESS_OPTIONS
+            )
             filepath = res.stdout.strip().split("\n")[-1].strip()
             
             if os.path.exists(filepath):
@@ -307,7 +442,17 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        try:
+            self.wfile.write(json.dumps(data).encode())
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _send_event(self, data):
+        try:
+            self.wfile.write(f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8"))
+            self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
 
 def run_server():
     ip = get_local_ip()
@@ -316,10 +461,14 @@ def run_server():
     print("="*50)
     print(f"API para celular: http://{ip}:{PORT}")
     print(f"Reproductor Local: http://localhost:{PORT}")
-    print(f"Musica PC: {PC_MUSIC_DIR}")
+    print(f"Descargas: {get_download_dir()}")
+    print(f"Carpetas de biblioteca: {len(describe_library_dirs())}")
+    print(f"Motor JavaScript: {YOUTUBE_RUNTIME_ARGS[-1] if '--js-runtimes' in YOUTUBE_RUNTIME_ARGS else 'no disponible'}")
     print("="*50)
     
-    server = HTTPServer(("0.0.0.0", PORT), Handler)
+    # El servidor concurrente permite navegar por la biblioteca mientras una
+    # canción se descarga o se reproduce.
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     server.serve_forever()
 
 if __name__ == "__main__":

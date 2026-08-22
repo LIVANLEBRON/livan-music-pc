@@ -1,6 +1,9 @@
 # Binarios pesados (se descargan automáticamente al compilar)
 ffmpeg.exe
 yt-dlp.exe
+deno.exe
+.windows-deps/
+.linux-build/
 
 # Carpetas generadas por PyInstaller
 dist/
