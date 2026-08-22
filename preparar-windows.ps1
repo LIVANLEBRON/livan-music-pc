@@ -28,6 +28,12 @@ Get-Dependency `
     -Url "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" `
     -Destination $ytDlpPath
 
+$cloudflaredPath = Join-Path $projectDir "cloudflared.exe"
+Get-Dependency `
+    -Name "Cloudflare Tunnel" `
+    -Url "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" `
+    -Destination $cloudflaredPath
+
 $denoPath = Join-Path $projectDir "deno.exe"
 if (-not (Test-Path $denoPath)) {
     $denoZip = Join-Path $depsDir "deno.zip"
@@ -55,7 +61,7 @@ if (-not (Test-Path $ffmpegPath)) {
     Copy-Item $ffmpegBinary.FullName $ffmpegPath -Force
 }
 
-foreach ($dependency in @($ytDlpPath, $denoPath, $ffmpegPath)) {
+foreach ($dependency in @($ytDlpPath, $denoPath, $ffmpegPath, $cloudflaredPath)) {
     if (-not (Test-Path $dependency)) {
         throw "Dependencia ausente: $dependency"
     }
@@ -66,3 +72,4 @@ Write-Host "Dependencias de Windows preparadas correctamente:"
 & $ytDlpPath --version
 & $denoPath --version | Select-Object -First 1
 & $ffmpegPath -version | Select-Object -First 1
+& $cloudflaredPath --version

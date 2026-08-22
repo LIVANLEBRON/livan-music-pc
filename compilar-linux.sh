@@ -11,6 +11,15 @@ fi
 cd "$PROYECTO"
 mkdir -p "$DESCARGAS"
 
+CLOUDFLARED="$(command -v cloudflared 2>/dev/null || true)"
+if [[ -z "$CLOUDFLARED" && -x "$HOME/.local/bin/cloudflared" ]]; then
+    CLOUDFLARED="$HOME/.local/bin/cloudflared"
+fi
+if [[ -z "$CLOUDFLARED" ]]; then
+    echo "ERROR: cloudflared no está instalado."
+    exit 1
+fi
+
 python3 -m PyInstaller \
     --noconsole \
     --onefile \
@@ -19,6 +28,7 @@ python3 -m PyInstaller \
     --add-data "public:public" \
     --add-data "icon.ico:." \
     --add-data "icon.png:." \
+    --add-binary "$CLOUDFLARED:." \
     --collect-all webview \
     --name "Livan-Music" \
     app_pc.py

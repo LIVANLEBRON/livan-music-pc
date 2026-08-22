@@ -25,6 +25,7 @@ py -m PyInstaller --noconsole --onefile --clean -y ^
   --add-binary "ffmpeg.exe;." ^
   --add-binary "yt-dlp.exe;." ^
   --add-binary "deno.exe;." ^
+  --add-binary "cloudflared.exe;." ^
   --add-data "icon.ico;." ^
   --icon=icon.ico ^
   --name "Livan Music" ^

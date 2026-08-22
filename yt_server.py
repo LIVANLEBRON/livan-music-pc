@@ -1,5 +1,6 @@
-import subprocess, json, os, socket, tempfile, shutil
+import subprocess, json, os, socket, tempfile, shutil, secrets, re
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.cookies import SimpleCookie
 from urllib.parse import urlparse, parse_qs, urlencode
 
 import sys
@@ -16,6 +17,8 @@ from library_config import (
 )
 
 PORT = int(os.environ.get("PORT", 8642))
+DESKTOP_SESSION_TOKEN = secrets.token_urlsafe(48)
+DESKTOP_COOKIE_NAME = "livan_desktop_session"
 
 # Carpeta temporal para la app de Android (para borrar tras enviar)
 ANDROID_TEMP_DIR = os.path.join(tempfile.gettempdir(), "YTDownloads")
@@ -87,20 +90,82 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=PUBLIC_DIR, **kwargs)
 
+    def log_message(self, format, *args):
+        """Evita que el token efímero de escritorio aparezca en los logs."""
+        message = format % args
+        message = re.sub(r"desktop_token=[^&\s\"]+", "desktop_token=[OCULTO]", message)
+        print(f"{self.address_string()} - - [{self.log_date_time_string()}] {message}")
+
+    def _is_desktop_session(self):
+        cookie = SimpleCookie()
+        try:
+            cookie.load(self.headers.get("Cookie", ""))
+        except Exception:
+            return False
+        value = cookie.get(DESKTOP_COOKIE_NAME)
+        return bool(value and secrets.compare_digest(value.value, DESKTOP_SESSION_TOKEN))
+
+    def _start_desktop_session(self, parsed):
+        """Canjea un token de un solo proceso por una cookie HTTP-only local."""
+        values = parse_qs(parsed.query).get("desktop_token", [])
+        if parsed.path != "/" or not values:
+            return False
+        host = self.headers.get("Host", "").rsplit(":", 1)[0].strip("[]").lower()
+        local_host = host in {"127.0.0.1", "localhost", "::1"}
+        if not local_host or not secrets.compare_digest(values[0], DESKTOP_SESSION_TOKEN):
+            self._json(403, {"error": "Sesión de escritorio no válida"})
+            return True
+
+        self.send_response(302)
+        self.send_header("Location", "/")
+        self.send_header(
+            "Set-Cookie",
+            f"{DESKTOP_COOKIE_NAME}={DESKTOP_SESSION_TOKEN}; Path=/; HttpOnly; SameSite=Strict",
+        )
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.end_headers()
+        return True
+
+    def _require_desktop_session(self):
+        if self._is_desktop_session():
+            return True
+        self._json(403, {"error": "Disponible únicamente en la aplicación de escritorio"})
+        return False
+
+    def _read_json_body(self, max_bytes=2 * 1024 * 1024):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError as error:
+            raise ValueError("Tamaño de solicitud no válido") from error
+        if length <= 0 or length > max_bytes:
+            raise ValueError("Solicitud vacía o demasiado grande")
+        return json.loads(self.rfile.read(length).decode("utf-8"))
+
     def do_GET(self):
         parsed = urlparse(self.path)
+
+        if self._start_desktop_session(parsed):
+            return
         
         # API: Verificar estado
         if parsed.path == "/api/status":
-            self._json(200, {
+            status = {
                 "status": "ok",
-                "music_dir": str(get_download_dir()),
-                "yt_dlp": YTDLP_PATH,
-                "ffmpeg": FFMPEG_PATH,
-            })
+                "desktop_session": self._is_desktop_session(),
+            }
+            if status["desktop_session"]:
+                status.update({
+                    "music_dir": str(get_download_dir()),
+                    "yt_dlp": YTDLP_PATH,
+                    "ffmpeg": FFMPEG_PATH,
+                })
+            self._json(200, status)
 
         # API: Configuración de descargas y carpetas de biblioteca
         elif parsed.path == "/api/settings":
+            if not self._require_desktop_session():
+                return
             self._json(200, public_settings())
             
         # API: Búsqueda en YouTube
@@ -151,17 +216,21 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             
             try:
+                desktop_session = self._is_desktop_session()
                 url = f"https://www.youtube.com/watch?v={vid}"
                 download_dir = get_download_dir()
                 print(f"Descargando (SSE) en PC: {url}")
                 print(f"Destino de descarga: {download_dir}")
                 output = os.path.join(download_dir, "%(title)s - %(channel)s.%(ext)s")
 
-                self._send_event({
+                preparing_event = {
                     "status": "preparing",
-                    "text": f"Preparando descarga en {download_dir}",
-                    "download_dir": str(download_dir),
-                })
+                    "text": "Preparando descarga...",
+                }
+                if desktop_session:
+                    preparing_event["text"] = f"Preparando descarga en {download_dir}"
+                    preparing_event["download_dir"] = str(download_dir)
+                self._send_event(preparing_event)
                 
                 cmd = [
                     YTDLP_PATH, "-f", "bestaudio[ext=m4a]/bestaudio/best",
@@ -192,22 +261,33 @@ class Handler(SimpleHTTPRequestHandler):
                         final_path = last_msg.split(":", 1)[1]
                     if "ERROR:" in last_msg:
                         error_msg = last_msg
-                    data_to_send = {"status": "processing", "text": last_msg}
+                    data_to_send = {"status": "processing", "text": "Procesando audio..."}
                     
                     if "[download]" in line and "%" in line:
                         data_to_send["status"] = "downloading"
+                        progress = re.search(r"\[download\]\s+([\d.]+)%", last_msg)
+                        data_to_send["text"] = (
+                            f"[download] {progress.group(1)}%" if progress else "Descargando..."
+                        )
+                    elif desktop_session:
+                        data_to_send["text"] = last_msg
                         
                     self._send_event(data_to_send)
                 
                 process.wait()
                 if process.returncode == 0:
                     destination = final_path or str(download_dir)
-                    self._send_event({
+                    completed_event = {
                         "status": "done",
-                        "text": f"Guardada en: {destination}",
-                        "file": final_path,
-                        "download_dir": str(download_dir),
-                    })
+                        "text": "Descarga completada",
+                    }
+                    if desktop_session:
+                        completed_event.update({
+                            "text": f"Guardada en: {destination}",
+                            "file": final_path,
+                            "download_dir": str(download_dir),
+                        })
+                    self._send_event(completed_event)
                 else:
                     detail = error_msg or last_msg
                     self._send_event({"status": "error", "text": detail[:300]})
@@ -321,21 +401,25 @@ class Handler(SimpleHTTPRequestHandler):
         
         # API: Guardar Playlists
         if parsed.path == "/api/playlists":
-            length = int(self.headers.get('Content-Length', 0))
-            body = self.rfile.read(length)
-            data = json.loads(body.decode('utf-8'))
-            
-            PLAYLISTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with PLAYLISTS_FILE.open("w", encoding="utf-8") as f:
-                json.dump(data, f, indent=4)
-                
-            self._json(200, {"status": "ok"})
+            try:
+                data = self._read_json_body()
+                if not isinstance(data, dict):
+                    raise ValueError("Formato de playlists no válido")
+                PLAYLISTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+                with PLAYLISTS_FILE.open("w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=4)
+                self._json(200, {"status": "ok"})
+            except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                self._json(400, {"error": str(error)})
             
         # API: Eliminar canción
         elif parsed.path == "/api/delete_song":
-            length = int(self.headers.get('Content-Length', 0))
-            body = self.rfile.read(length)
-            data = json.loads(body.decode('utf-8'))
+            if not self._require_desktop_session():
+                return
+            try:
+                data = self._read_json_body(max_bytes=64 * 1024)
+            except (ValueError, UnicodeDecodeError) as error:
+                return self._json(400, {"error": str(error)})
             
             filename = data.get("filename", "")
             source = data.get("source_id", "")
@@ -358,9 +442,10 @@ class Handler(SimpleHTTPRequestHandler):
             self._json(400, {"error": "Archivo no encontrado"})
 
         elif parsed.path == "/api/settings":
-            length = int(self.headers.get('Content-Length', 0))
+            if not self._require_desktop_session():
+                return
             try:
-                data = json.loads(self.rfile.read(length).decode("utf-8"))
+                data = self._read_json_body(max_bytes=64 * 1024)
                 action = data.get("action", "")
                 path = data.get("path", "")
                 if action == "set_download":

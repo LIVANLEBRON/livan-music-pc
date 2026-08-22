@@ -15,6 +15,8 @@ Descarga canciones de YouTube directamente a tu PC y las reproduce sin necesidad
 - 📜 **Historial de descargas** — Seguimiento en tiempo real del progreso
 - 🖥️ **App nativa de Windows** — Se instala como cualquier programa
 - 🐧 **Compatible con Linux** — Usa el navegador si pywebview no está instalado
+- 🌐 **Acceso remoto opcional** — Inicia y detiene Cloudflare Tunnel junto con la app
+- 🔒 **Modo web protegido** — Las rutas y el borrado de archivos solo existen en la app nativa
 
 ---
 
@@ -76,6 +78,23 @@ Para generar un ejecutable Linux con ventana nativa:
 
 El archivo final se copia automáticamente a la carpeta Descargas del usuario
 con el nombre `Livan-Music`.
+
+## 🌐 Acceso remoto con Cloudflare Tunnel
+
+Livan Music puede iniciar automáticamente un túnel administrado remotamente.
+El servidor y el túnel se abren al ejecutar la aplicación y el conector se
+cierra al cerrar la ventana. El token nunca se guarda en Git ni dentro del EXE.
+
+La primera vez, crea en Cloudflare una ruta publicada cuyo servicio sea
+`http://localhost:8642`. Después guarda el token privado una sola vez:
+
+```bash
+./configurar-tunel-linux.sh
+```
+
+En Windows, ejecuta `configurar-tunel-windows.ps1` con PowerShell. A partir de
+ese momento basta con abrir `Livan Music.exe` con doble clic. La compilación de
+Windows incluye `cloudflared.exe` automáticamente.
 
 ---
 

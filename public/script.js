@@ -1,4 +1,18 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const applySessionCapabilities = async () => {
+        try {
+            const response = await fetch('/api/status', { cache: 'no-store' });
+            const status = await response.json();
+            const isDesktop = status.desktop_session === true;
+            document.documentElement.classList.toggle('desktop-session', isDesktop);
+            return isDesktop;
+        } catch (error) {
+            document.documentElement.classList.remove('desktop-session');
+            console.warn('La sesión se mantiene en modo web restringido:', error);
+            return false;
+        }
+    };
+
     const markNativeShell = async () => {
         document.documentElement.classList.add('native-shell');
         try {
@@ -169,6 +183,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return element.innerHTML;
     }
 
+    function escapeAttribute(value) {
+        return escapeHtml(value).replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+    }
+
     async function updateSettings(action, path, successMessage) {
         const status = document.getElementById('settings-status');
         if(!path || !path.trim()) {
@@ -231,11 +249,11 @@ document.addEventListener('DOMContentLoaded', () => {
             div.dataset.songIndex = index;
 
             const imgHtml = song.thumbnail_url
-                ? `<img src="${escapeHtml(song.thumbnail_url)}" class="song-card-img" loading="lazy" decoding="async" alt="">`
+                ? `<img src="${escapeAttribute(song.thumbnail_url)}" class="song-card-img" loading="lazy" decoding="async" alt="">`
                 : `<span class="material-symbols-outlined" style="font-size: 40px; color: #475569;">music_note</span>`;
 
             div.innerHTML = `
-                <div class="song-card-img-container" data-action="play" role="button" tabindex="0" aria-label="Reproducir ${escapeHtml(song.title)}">
+                <div class="song-card-img-container" data-action="play" role="button" tabindex="0" aria-label="Reproducir ${escapeAttribute(song.title)}">
                     ${imgHtml}
                     <button class="song-card-action" type="button" tabindex="-1" aria-hidden="true">
                         <span class="material-symbols-outlined">play_arrow</span>
@@ -246,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button class="fav-btn control-btn" data-action="favorite" type="button" style="position: absolute; top: 15px; right: 15px; background: rgba(0,0,0,0.5); border-radius: 50%; padding: 5px; color: ${isFav ? '#EF4444' : '#fff'};" title="Favoritos" aria-label="Cambiar favorito">
                     <span class="material-symbols-outlined" style="font-size: 20px;">${isFav ? 'favorite' : 'favorite_border'}</span>
                 </button>
-                <button class="delete-btn control-btn" data-action="delete" type="button" style="position: absolute; top: 15px; left: 15px; background: rgba(239,68,68,0.7); border-radius: 50%; padding: 5px; color: #fff; opacity: 0; transition: opacity 0.3s;" title="Eliminar Canción" aria-label="Eliminar canción">
+                <button class="delete-btn control-btn" data-desktop-only data-action="delete" type="button" style="position: absolute; top: 15px; left: 15px; background: rgba(239,68,68,0.7); border-radius: 50%; padding: 5px; color: #fff; opacity: 0; transition: opacity 0.3s;" title="Eliminar Canción" aria-label="Eliminar canción">
                     <span class="material-symbols-outlined" style="font-size: 20px;">delete</span>
                 </button>
             `;
@@ -521,7 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.style.cursor = 'pointer';
             card.innerHTML = `
                 <h3><span class="material-symbols-outlined" style="font-size: 32px;">queue_music</span></h3>
-                <p style="font-size: 18px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</p>
+                <p style="font-size: 18px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(name)}</p>
                 <p style="font-size: 13px;">${list.length} canciones</p>
             `;
             card.onclick = () => viewPlaylistContent(name, list);
@@ -547,20 +565,26 @@ document.addEventListener('DOMContentLoaded', () => {
             div.className = 'song-row';
             div.innerHTML = `
                 <div class="song-icon">🎵</div>
-                <div class="song-details" onclick="playFromPlaylist('${name}', ${index})">
-                    <div class="song-title">${song.title}</div>
-                    <div class="song-artist">${song.artist}</div>
+                <div class="song-details" role="button" tabindex="0">
+                    <div class="song-title">${escapeHtml(song.title)}</div>
+                    <div class="song-artist">${escapeHtml(song.artist)}</div>
                 </div>
             `;
+            const details = div.querySelector('.song-details');
+            const playSelected = () => {
+                activePlaylistView = list;
+                playSong(index);
+            };
+            details.addEventListener('click', playSelected);
+            details.addEventListener('keydown', event => {
+                if(event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    playSelected();
+                }
+            });
             container.appendChild(div);
         });
     }
-
-    window.playFromPlaylist = function(name, index) {
-        if (name === 'Favoritos') activePlaylistView = playlistsData["Favoritos"];
-        else activePlaylistView = playlistsData["Mis Playlists"][name];
-        playSong(index);
-    };
 
     // --- Search & Download ---
     document.getElementById('library-search').addEventListener('input', (e) => {
@@ -614,13 +638,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.className = 'song-card';
                 div.innerHTML = `
                     <div class="song-card-img-container">
-                        <img src="${item.thumbnail}" class="song-card-img">
+                        <img src="${escapeAttribute(item.thumbnail)}" class="song-card-img" alt="">
                         <button class="song-card-action download-btn" title="Descargar">
                             <span class="material-symbols-outlined">download</span>
                         </button>
                     </div>
-                    <div class="song-card-title">${item.title}</div>
-                    <div class="song-card-artist">${item.artist}</div>
+                    <div class="song-card-title">${escapeHtml(item.title)}</div>
+                    <div class="song-card-artist">${escapeHtml(item.artist)}</div>
                 `;
                 
                 div.querySelector('.download-btn').onclick = (e) => {
@@ -666,10 +690,10 @@ document.addEventListener('DOMContentLoaded', () => {
             div.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div style="display: flex; align-items: center; gap: 15px;">
-                        <img src="${item.thumbnail}" width="40" height="40" style="border-radius:8px; object-fit:cover;">
+                        <img src="${escapeAttribute(item.thumbnail)}" width="40" height="40" style="border-radius:8px; object-fit:cover;" alt="">
                         <div>
-                            <div class="song-title">${item.title}</div>
-                            <div class="song-artist" style="color: ${statusColor}; font-weight: 600;">${statusIcon} ${item.statusText}</div>
+                            <div class="song-title">${escapeHtml(item.title)}</div>
+                            <div class="song-artist" style="color: ${statusColor}; font-weight: 600;">${statusIcon} ${escapeHtml(item.statusText)}</div>
                         </div>
                     </div>
                 </div>
@@ -756,5 +780,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Inicializar app
-    Promise.all([loadPlaylists(), loadSettings()]).then(() => loadLibrary());
+    Promise.all([loadPlaylists(), applySessionCapabilities()]).then(([, isDesktop]) => {
+        const settingsReady = isDesktop ? loadSettings() : Promise.resolve();
+        return settingsReady.then(() => loadLibrary());
+    });
 });

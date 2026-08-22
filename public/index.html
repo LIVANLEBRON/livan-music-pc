@@ -24,7 +24,7 @@
                 <li data-tab="library" tabindex="0" aria-label="Canciones locales" title="Canciones locales"><span class="nav-icon material-symbols-outlined">library_music</span><span class="nav-label">Canciones locales</span></li>
                 <li data-tab="search" tabindex="0" aria-label="Buscar y descargar" title="Buscar y descargar"><span class="nav-icon material-symbols-outlined">travel_explore</span><span class="nav-label">Buscar y descargar</span></li>
                 <li data-tab="playlists" tabindex="0" aria-label="Mis playlists" title="Mis playlists"><span class="nav-icon material-symbols-outlined">queue_music</span><span class="nav-label">Mis playlists</span></li>
-                <li data-tab="settings" tabindex="0" aria-label="Ubicaciones" title="Ubicaciones"><span class="nav-icon material-symbols-outlined">folder_managed</span><span class="nav-label">Ubicaciones</span></li>
+                <li data-tab="settings" data-desktop-only tabindex="0" aria-label="Ubicaciones" title="Ubicaciones"><span class="nav-icon material-symbols-outlined">folder_managed</span><span class="nav-label">Ubicaciones</span></li>
                 <li data-tab="history" tabindex="0" aria-label="Historial" title="Historial"><span class="nav-icon material-symbols-outlined">history</span><span class="nav-label">Historial</span></li>
             </ul>
             <div class="sidebar-status">
@@ -117,7 +117,7 @@
                 <div class="song-list" id="history-list"><p class="loading-text">Aún no has descargado nada en esta sesión.</p></div>
             </section>
 
-            <section id="tab-settings" class="tab-content">
+            <section id="tab-settings" class="tab-content" data-desktop-only>
                 <div class="section-heading">
                     <div><span class="section-label">Biblioteca y almacenamiento</span><h2>Ubicaciones</h2><p>Decide dónde guardar las descargas y conecta otras carpetas que ya contienen música. Ningún archivo se mueve.</p></div>
                 </div>

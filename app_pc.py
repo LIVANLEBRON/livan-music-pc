@@ -4,6 +4,7 @@ import os
 import time
 import urllib.request
 import webbrowser
+from urllib.parse import urlencode
 
 # WebKitGTK puede abrir una ventana vacía en algunos equipos Linux con
 # Wayland/X11 cuando el renderizador DMABUF no es compatible con el driver.
@@ -19,7 +20,8 @@ except ImportError:
 # Aseguramos que Python encuentre yt_server.py
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from yt_server import run_server, PORT
+from yt_server import DESKTOP_SESSION_TOKEN, run_server, PORT
+from tunnel_manager import start_tunnel, stop_tunnel, tunnel_status
 
 
 class DesktopApi:
@@ -46,6 +48,9 @@ class DesktopApi:
         except Exception as error:
             print(f"No se pudo abrir el selector de carpetas: {error}")
             return ""
+
+    def get_tunnel_status(self):
+        return tunnel_status()
 
 def start_background_server():
     print("Iniciando motor de descargas...")
@@ -74,27 +79,34 @@ if __name__ == '__main__':
     if not ready:
         print("ADVERTENCIA: El servidor tardó demasiado. Abriendo de todas formas...")
 
-    url = f'http://127.0.0.1:{PORT}'
+    # El túnel depende del servidor local y comparte su ciclo de vida.
+    start_tunnel()
 
-    if webview is None:
-        # En Linux la interfaz web puede funcionar sin instalar pywebview.
-        print(f"Abriendo Livan Music en el navegador: {url}")
-        webbrowser.open(url)
-        server_thread.join()
-    else:
-        icon_name = 'icon.ico' if os.name == 'nt' else 'icon.png'
-        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), icon_name)
-        print("Abriendo Livan Music...")
-        webview.create_window(
-            title='Livan Music',
-            url=url,
-            width=1100,
-            height=750,
-            resizable=True,
-            background_color='#070B19',
-            js_api=DesktopApi()
-        )
-        start_options = {"icon": icon_path} if os.path.isfile(icon_path) else {}
-        if sys.platform.startswith('linux'):
-            start_options["gui"] = "gtk"
-        webview.start(**start_options)
+    clean_url = f'http://127.0.0.1:{PORT}'
+    desktop_url = f'{clean_url}/?{urlencode({"desktop_token": DESKTOP_SESSION_TOKEN})}'
+
+    try:
+        if webview is None:
+            # En Linux la interfaz web puede funcionar sin instalar pywebview.
+            print(f"Abriendo Livan Music en el navegador: {clean_url}")
+            webbrowser.open(clean_url)
+            server_thread.join()
+        else:
+            icon_name = 'icon.ico' if os.name == 'nt' else 'icon.png'
+            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), icon_name)
+            print("Abriendo Livan Music...")
+            webview.create_window(
+                title='Livan Music',
+                url=desktop_url,
+                width=1100,
+                height=750,
+                resizable=True,
+                background_color='#070B19',
+                js_api=DesktopApi()
+            )
+            start_options = {"icon": icon_path} if os.path.isfile(icon_path) else {}
+            if sys.platform.startswith('linux'):
+                start_options["gui"] = "gtk"
+            webview.start(**start_options)
+    finally:
+        stop_tunnel()
