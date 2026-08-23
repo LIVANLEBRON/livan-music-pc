@@ -83,6 +83,7 @@ livan-music-pc/
 │   ├── script.js                # Reproductor y comunicación con la API
 │   └── fonts/                   # Tipografías servidas localmente
 ├── iniciar-linux.sh             # Ejecución en desarrollo sobre Linux
+├── instalar-linux-mint.sh       # Dependencias para usar el binario en Mint
 ├── compilar-linux.sh            # Ejecutable Linux con PyInstaller
 ├── preparar-windows.ps1         # Descarga dependencias de Windows
 ├── compilar.bat                 # Ejecutable Windows con PyInstaller
@@ -125,6 +126,20 @@ puerto.
 ```
 
 El resultado se copia como `Livan-Music` en la carpeta de descargas del usuario.
+
+### Preparar otra PC con Linux Mint
+
+El instalador de dependencias para Linux Mint es independiente del ejecutable y
+no altera la aplicación compilada:
+
+```bash
+chmod +x instalar-linux-mint.sh
+./instalar-linux-mint.sh
+```
+
+Después se puede copiar el ejecutable privado, darle permiso con
+`chmod +x Livan-Music` y abrirlo. El script instala WebKitGTK, FFmpeg, yt-dlp y
+Deno, pero no guarda ni modifica credenciales del túnel.
 
 ## Desarrollo y compilación en Windows
 
